@@ -22,11 +22,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final com.shadowsentinel.audit.AuditService auditService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                       JwtService jwtService, com.shadowsentinel.audit.AuditService auditService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -53,15 +56,19 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
-        User user = userRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        java.util.Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
+        if (userOpt.isEmpty() || !passwordEncoder.matches(request.getPassword(), userOpt.get().getPasswordHash())) {
+            auditService.log(userOpt.map(User::getId).orElse(null), com.shadowsentinel.audit.AuditEventType.LOGIN_FAILED,
+                    normalizedEmail, "Invalid email or password");
             throw new BadCredentialsException("Invalid email or password");
         }
 
+        User user = userOpt.get();
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
         Instant expiresAt = jwtService.calculateExpiration();
+
+        auditService.log(user.getId(), com.shadowsentinel.audit.AuditEventType.LOGIN,
+                user.getId().toString(), "User login successful");
 
         return AuthResponse.builder()
                 .token(token)

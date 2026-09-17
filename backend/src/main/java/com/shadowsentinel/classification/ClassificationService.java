@@ -35,17 +35,20 @@ public class ClassificationService {
     private final BrowserActivityRepository activityRepository;
     private final MlClient mlClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.shadowsentinel.audit.AuditService auditService;
 
     public ClassificationService(ClassificationEvidenceRepository evidenceRepository,
                                  ClassificationResultRepository resultRepository,
                                  BrowserActivityRepository activityRepository,
                                  MlClient mlClient,
-                                 ApplicationEventPublisher eventPublisher) {
+                                 ApplicationEventPublisher eventPublisher,
+                                 com.shadowsentinel.audit.AuditService auditService) {
         this.evidenceRepository = evidenceRepository;
         this.resultRepository = resultRepository;
         this.activityRepository = activityRepository;
         this.mlClient = mlClient;
         this.eventPublisher = eventPublisher;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -86,6 +89,8 @@ public class ClassificationService {
                 .build();
 
         ClassificationEvidence saved = evidenceRepository.save(evidence);
+        auditService.log(currentUser.getId(), com.shadowsentinel.audit.AuditEventType.EVIDENCE_INGESTED,
+                saved.getId().toString(), "Evidence ingested for activity " + activity.getId());
 
         // ML inference: non-blocking resilience
         try {
@@ -99,6 +104,8 @@ public class ClassificationService {
                         .build();
 
                 ClassificationResult savedResult = resultRepository.save(result);
+                auditService.log(currentUser.getId(), com.shadowsentinel.audit.AuditEventType.CLASSIFICATION_CREATED,
+                        savedResult.getId().toString(), "Classification " + savedResult.getClassLabel() + " generated");
                 eventPublisher.publishEvent(new ClassificationCompletedEvent(this, savedResult));
                 log.info("Classification completed for activity {}: {} (confidence: {})",
                         activity.getId(), savedResult.getClassLabel(), savedResult.getConfidence());

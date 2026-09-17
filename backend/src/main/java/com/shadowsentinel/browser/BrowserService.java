@@ -21,10 +21,14 @@ public class BrowserService {
 
     private final BrowserSessionRepository sessionRepository;
     private final BrowserActivityRepository activityRepository;
+    private final com.shadowsentinel.audit.AuditService auditService;
 
-    public BrowserService(BrowserSessionRepository sessionRepository, BrowserActivityRepository activityRepository) {
+    public BrowserService(BrowserSessionRepository sessionRepository,
+                          BrowserActivityRepository activityRepository,
+                          com.shadowsentinel.audit.AuditService auditService) {
         this.sessionRepository = sessionRepository;
         this.activityRepository = activityRepository;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -37,6 +41,8 @@ public class BrowserService {
                 .build();
 
         BrowserSession saved = sessionRepository.save(session);
+        auditService.log(currentUser.getId(), com.shadowsentinel.audit.AuditEventType.SESSION_STARTED,
+                saved.getId().toString(), "Browser session started");
         return new CreateSessionResponse(saved.getId());
     }
 

@@ -47,6 +47,9 @@ class BrowserControllerTest {
     private BrowserActivityRepository activityRepository;
 
     @Autowired
+    private com.shadowsentinel.alert.AlertRepository alertRepository;
+
+    @Autowired
     private com.shadowsentinel.risk.RiskAssessmentRepository riskAssessmentRepository;
 
     @Autowired
@@ -68,6 +71,7 @@ class BrowserControllerTest {
 
     @BeforeEach
     void setUp() {
+        alertRepository.deleteAll();
         riskAssessmentRepository.deleteAll();
         resultRepository.deleteAll();
         evidenceRepository.deleteAll();

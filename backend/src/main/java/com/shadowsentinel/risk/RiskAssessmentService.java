@@ -38,19 +38,25 @@ public class RiskAssessmentService {
     private final ClassificationEvidenceRepository evidenceRepository;
     private final BrowserActivityRepository activityRepository;
     private final RiskEngine riskEngine;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+    private final com.shadowsentinel.audit.AuditService auditService;
 
     public RiskAssessmentService(RiskAssessmentRepository riskAssessmentRepository,
                                  CompanyPolicyRepository companyPolicyRepository,
                                  PolicyRuleRepository policyRuleRepository,
                                  ClassificationEvidenceRepository evidenceRepository,
                                  BrowserActivityRepository activityRepository,
-                                 RiskEngine riskEngine) {
+                                 RiskEngine riskEngine,
+                                 org.springframework.context.ApplicationEventPublisher eventPublisher,
+                                 com.shadowsentinel.audit.AuditService auditService) {
         this.riskAssessmentRepository = riskAssessmentRepository;
         this.companyPolicyRepository = companyPolicyRepository;
         this.policyRuleRepository = policyRuleRepository;
         this.evidenceRepository = evidenceRepository;
         this.activityRepository = activityRepository;
         this.riskEngine = riskEngine;
+        this.eventPublisher = eventPublisher;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -91,6 +97,14 @@ public class RiskAssessmentService {
         RiskAssessment saved = riskAssessmentRepository.save(assessment);
         log.info("Risk assessment saved for activity {}: score={}, level={}",
                 activityId, saved.getRiskScore(), saved.getRiskLevel());
+
+        eventPublisher.publishEvent(new com.shadowsentinel.risk.event.RiskAssessedEvent(this, saved));
+
+        Long userId = (result.getActivity().getSession() != null && result.getActivity().getSession().getUser() != null)
+                ? result.getActivity().getSession().getUser().getId()
+                : null;
+        auditService.log(userId, com.shadowsentinel.audit.AuditEventType.RISK_ASSESSED, saved.getId().toString(),
+                "Risk assessed: " + saved.getRiskLevel() + " (" + saved.getRiskScore() + ")");
 
         return saved;
     }
@@ -190,6 +204,9 @@ public class RiskAssessmentService {
         policy.addRule(savedRule);
         policy.setVersion(policy.getVersion() + 1);
         companyPolicyRepository.save(policy);
+
+        auditService.log(null, com.shadowsentinel.audit.AuditEventType.POLICY_CHANGED, policy.getId().toString(),
+                "Policy rule added: " + savedRule.getRuleKey());
 
         return mapToRuleResponse(savedRule);
     }

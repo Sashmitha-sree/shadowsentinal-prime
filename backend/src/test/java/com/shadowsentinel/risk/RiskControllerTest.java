@@ -66,6 +66,9 @@ class RiskControllerTest {
     private CompanyPolicyRepository companyPolicyRepository;
 
     @Autowired
+    private com.shadowsentinel.alert.AlertRepository alertRepository;
+
+    @Autowired
     private ApplicationEventPublisher eventPublisher;
 
     @Autowired
@@ -86,6 +89,7 @@ class RiskControllerTest {
 
     @BeforeEach
     void setUp() {
+        alertRepository.deleteAll();
         riskAssessmentRepository.deleteAll();
         resultRepository.deleteAll();
         evidenceRepository.deleteAll();

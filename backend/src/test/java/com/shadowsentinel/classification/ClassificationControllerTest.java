@@ -60,6 +60,9 @@ class ClassificationControllerTest {
     @Autowired
     private com.shadowsentinel.risk.RiskAssessmentRepository riskAssessmentRepository;
 
+    @Autowired
+    private com.shadowsentinel.alert.AlertRepository alertRepository;
+
     @org.springframework.boot.test.mock.mockito.MockBean
     private com.shadowsentinel.classification.ml.MlClient mlClient;
 
@@ -77,6 +80,7 @@ class ClassificationControllerTest {
 
     @BeforeEach
     void setUp() {
+        alertRepository.deleteAll();
         riskAssessmentRepository.deleteAll();
         resultRepository.deleteAll();
         evidenceRepository.deleteAll();

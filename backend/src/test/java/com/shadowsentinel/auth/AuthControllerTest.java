@@ -34,9 +34,12 @@ class AuthControllerTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private com.shadowsentinel.TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
-        userRepository.deleteAll();
+        databaseCleaner.clean();
     }
 
     @Test
