@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow Sentinel - AI Security Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Auth Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="brand-badge">SHADOW SENTINEL</div>
+        <h2>Enterprise Security Console</h2>
+        <p class="subtitle">Sign in to monitor AI activity, risk assessments, and policies.</p>
+      </div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-email">Email Address</label>
+          <input type="email" id="login-email" required placeholder="analyst@sentinel.local" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div id="login-error" class="error-msg hidden"></div>
+        <button type="submit" id="login-btn" class="btn btn-primary btn-block">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main App Shell -->
+  <div id="app-shell" class="app-layout hidden">
+    <!-- Header -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="brand-icon">&#x1F6E1;</div>
+        <div class="brand-text">
+          <span class="brand-title">Shadow Sentinel</span>
+          <span class="brand-subtitle">AI Observability & Risk Engine</span>
+        </div>
+      </div>
+      <div class="nav-user">
+        <span id="user-role-badge" class="badge">USER</span>
+        <span id="user-email-display" class="user-email">user@sentinel.local</span>
+        <button id="logout-btn" class="btn btn-secondary btn-sm">Sign Out</button>
+      </div>
+    </header>
+
+    <!-- Sub-header Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      <button class="tab-btn" data-tab="activities">Activities</button>
+      <button class="tab-btn" data-tab="alerts">
+        Alerts <span id="nav-alert-count" class="badge-count hidden">0</span>
+      </button>
+      <button class="tab-btn" id="tab-policies-btn" data-tab="policies">Policies</button>
+    </div>
+
+    <!-- Main Container -->
+    <main class="main-content">
+
+      <!-- Tab 1: Overview -->
+      <section id="tab-overview" class="tab-pane active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-title">Total Activities</div>
+            <div class="stat-value" id="stat-total-activities">0</div>
+            <div class="stat-desc">Telemetry activities recorded</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">AI Engagements</div>
+            <div class="stat-value text-accent" id="stat-ai-activities">0</div>
+            <div class="stat-desc">Pages with AI interaction / generation</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">High / Critical Risks</div>
+            <div class="stat-value text-danger" id="stat-high-risks">0</div>
+            <div class="stat-desc">Activities requiring review</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">Active Alerts</div>
+            <div class="stat-value text-warning" id="stat-active-alerts">0</div>
+            <div class="stat-desc">Unresolved security alerts</div>
+          </div>
+        </div>
+
+        <div class="charts-grid">
+          <!-- Class Label Distribution Chart -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Classification Distribution</h3>
+              <span class="chart-tag">ML Inference</span>
+            </div>
+            <div class="bar-chart-container" id="chart-class-distribution">
+              <div class="chart-empty">Loading classification telemetry...</div>
+            </div>
+          </div>
+
+          <!-- Risk Level Distribution Chart -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Risk Level Breakdown</h3>
+              <span class="chart-tag">Rule-Based Engine</span>
+            </div>
+            <div class="bar-chart-container" id="chart-risk-distribution">
+              <div class="chart-empty">Loading risk assessments...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: Activities -->
+      <section id="tab-activities" class="tab-pane">
+        <div class="section-toolbar">
+          <h2>Browser Activities</h2>
+          <button id="refresh-activities-btn" class="btn btn-secondary btn-sm">Refresh</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="activities-table">
+            <thead>
+              <tr>
+                <th>Domain</th>
+                <th>Page Title</th>
+                <th>Captured At</th>
+                <th>Classification</th>
+                <th>Confidence</th>
+                <th>Risk Level</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="activities-table-body">
+              <tr><td colspan="7" class="text-center">Loading browser activities...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Tab 3: Alerts -->
+      <section id="tab-alerts" class="tab-pane">
+        <div class="section-toolbar">
+          <h2>Incident Alerts</h2>
+          <div class="toolbar-actions">
+            <select id="filter-alert-status" class="form-select">
+              <option value="">All Statuses</option>
+              <option value="NEW">New</option>
+              <option value="ACKNOWLEDGED">Acknowledged</option>
+              <option value="RESOLVED">Resolved</option>
+            </select>
+            <select id="filter-alert-severity" class="form-select">
+              <option value="">All Severities</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+            <button id="refresh-alerts-btn" class="btn btn-secondary btn-sm">Filter</button>
+          </div>
+        </div>
+        <div class="alerts-list" id="alerts-list-container">
+          <div class="chart-empty">Loading alerts...</div>
+        </div>
+      </section>
+
+      <!-- Tab 4: Policies (ADMIN) -->
+      <section id="tab-policies" class="tab-pane">
+        <div id="policy-non-admin-msg" class="callout callout-warning hidden">
+          <strong>Access Restricted:</strong> Policy configuration is restricted to users with the ADMIN role.
+        </div>
+
+        <div id="policy-admin-content">
+          <div class="policy-layout">
+            <!-- Left: Rule List -->
+            <div class="policy-list-column">
+              <div class="section-toolbar">
+                <h2 id="policy-name-header">Corporate AI Policies</h2>
+                <button id="refresh-policies-btn" class="btn btn-secondary btn-sm">Refresh</button>
+              </div>
+              <div id="policies-container">
+                <div class="chart-empty">Loading active corporate policies...</div>
+              </div>
+            </div>
+
+            <!-- Right: Add Rule Form -->
+            <div class="policy-form-column">
+              <div class="panel-card">
+                <h3>Add Policy Rule</h3>
+                <p class="panel-desc">Configure automated guardrails and risk weights for detected behavior.</p>
+
+                <form id="add-rule-form">
+                  <div class="form-group">
+                    <label for="rule-key">Rule Key *</label>
+                    <input type="text" id="rule-key" required placeholder="RULE_CODE_UPLOAD">
+                  </div>
+                  <div class="form-group">
+                    <label for="rule-description">Description *</label>
+                    <input type="text" id="rule-description" required placeholder="User submitted source code to AI service">
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group col-half">
+                      <label for="rule-severity">Severity *</label>
+                      <select id="rule-severity" required>
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH" selected>High</option>
+                        <option value="CRITICAL">Critical</option>
+                      </select>
+                    </div>
+                    <div class="form-group col-half">
+                      <label for="rule-weight">Score Weight (0-40) *</label>
+                      <input type="number" id="rule-weight" required min="0" max="40" value="20">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group col-half">
+                      <label for="rule-label">Applies to Label</label>
+                      <select id="rule-label">
+                        <option value="">Any Label (Wildcard)</option>
+                        <option value="NON_AI">NON_AI</option>
+                        <option value="AI_CAPABLE_PAGE">AI_CAPABLE_PAGE</option>
+                        <option value="AI_INTERACTION">AI_INTERACTION</option>
+                        <option value="AI_GENERATION">AI_GENERATION</option>
+                      </select>
+                    </div>
+                    <div class="form-group col-half">
+                      <label for="rule-domain">Domain Pattern (Glob)</label>
+                      <input type="text" id="rule-domain" placeholder="*openai.com*">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group col-half">
+                      <label for="rule-clicks">Min Generate Clicks</label>
+                      <input type="number" id="rule-clicks" min="1" placeholder="e.g. 5">
+                    </div>
+                    <div class="form-group col-half">
+                      <label for="rule-file-upload">Requires File Upload</label>
+                      <select id="rule-file-upload">
+                        <option value="">Ignore</option>
+                        <option value="true">Must be present</option>
+                        <option value="false">Must not be present</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="rule-paste">Requires Paste Event</label>
+                    <select id="rule-paste">
+                      <option value="">Ignore</option>
+                      <option value="true">Must have paste event</option>
+                      <option value="false">Must not have paste event</option>
+                    </select>
+                  </div>
+                  <div id="rule-form-feedback" class="form-feedback hidden"></div>
+                  <button type="submit" id="save-rule-btn" class="btn btn-primary btn-block">Save Rule to Policy</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Activity Detail Side Panel (Slide-Over Drawer) -->
+  <div id="activity-drawer" class="drawer-overlay hidden">
+    <div class="drawer-card">
+      <div class="drawer-header">
+        <div>
+          <h3 id="drawer-domain">Activity Detail</h3>
+          <span id="drawer-activity-id" class="text-muted text-sm"></span>
+        </div>
+        <button id="drawer-close-btn" class="btn-close">&times;</button>
+      </div>
+
+      <div class="drawer-body">
+        <!-- Risk Assessment Box -->
+        <div class="drawer-section">
+          <h4>Risk Assessment</h4>
+          <div class="risk-overview-box">
+            <div class="risk-score-display">
+              <span class="score-label">Risk Score</span>
+              <span id="drawer-risk-score" class="score-number">0</span>
+            </div>
+            <div class="risk-level-badge-container">
+              <span id="drawer-risk-level" class="badge">LOW</span>
+            </div>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">Matched Rules:</span>
+            <span id="drawer-matched-rules" class="detail-val">None</span>
+          </div>
+          <div class="reasoning-box">
+            <span class="reasoning-title">Explainability Summary:</span>
+            <p id="drawer-reasoning" class="reasoning-text">No assessment available.</p>
+          </div>
+        </div>
+
+        <!-- Telemetry Evidence: 18 Features -->
+        <div class="drawer-section">
+          <h4>Captured Telemetry Evidence (18 Features)</h4>
+
+          <div class="evidence-group-title">Metadata Signals (6)</div>
+          <div class="evidence-grid">
+            <div class="evidence-item"><span>Domain Length:</span> <strong id="ev-domainLength">-</strong></div>
+            <div class="evidence-item"><span>Visit Count:</span> <strong id="ev-visitCount">-</strong></div>
+            <div class="evidence-item"><span>Duration (s):</span> <strong id="ev-durationSeconds">-</strong></div>
+            <div class="evidence-item"><span>Known AI Domain:</span> <strong id="ev-isKnownAiDomain">-</strong></div>
+            <div class="evidence-item"><span>Hour of Day:</span> <strong id="ev-hourOfDay">-</strong></div>
+            <div class="evidence-item"><span>Path Depth:</span> <strong id="ev-pathDepth">-</strong></div>
+          </div>
+
+          <div class="evidence-group-title">UI Signals (7)</div>
+          <div class="evidence-grid">
+            <div class="evidence-item"><span>Chat Interface:</span> <strong id="ev-chatInterfacePresent">-</strong></div>
+            <div class="evidence-item"><span>Prompt Input:</span> <strong id="ev-promptInputPresent">-</strong></div>
+            <div class="evidence-item"><span>Generate Control:</span> <strong id="ev-generateControlPresent">-</strong></div>
+            <div class="evidence-item"><span>Regenerate Control:</span> <strong id="ev-regenerateControlPresent">-</strong></div>
+            <div class="evidence-item"><span>AI Term Count:</span> <strong id="ev-aiTermCount">-</strong></div>
+            <div class="evidence-item"><span>Streaming Output:</span> <strong id="ev-streamingOutputPresent">-</strong></div>
+            <div class="evidence-item"><span>File Upload:</span> <strong id="ev-fileUploadPresent">-</strong></div>
+          </div>
+
+          <div class="evidence-group-title">Interaction Signals (5)</div>
+          <div class="evidence-grid">
+            <div class="evidence-item"><span>Prompt Submits:</span> <strong id="ev-promptSubmitCount">-</strong></div>
+            <div class="evidence-item"><span>Generate Clicks:</span> <strong id="ev-generateClickCount">-</strong></div>
+            <div class="evidence-item"><span>Paste Events:</span> <strong id="ev-pasteEventCount">-</strong></div>
+            <div class="evidence-item"><span>Copy from Response:</span> <strong id="ev-copyFromResponseCount">-</strong></div>
+            <div class="evidence-item"><span>Typed Char Bucket:</span> <strong id="ev-typedCharCountBucket">-</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
