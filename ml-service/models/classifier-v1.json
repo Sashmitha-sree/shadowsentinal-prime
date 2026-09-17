@@ -1,0 +1,98 @@
+{
+  "modelVersion": "v1",
+  "trainedAt": "2026-09-17T03:31:43.119611+00:00",
+  "featureOrder": [
+    "domainLength",
+    "visitCount",
+    "durationSeconds",
+    "isKnownAiDomain",
+    "hourOfDay",
+    "pathDepth",
+    "chatInterfacePresent",
+    "promptInputPresent",
+    "generateControlPresent",
+    "regenerateControlPresent",
+    "aiTermCount",
+    "streamingOutputPresent",
+    "fileUploadPresent",
+    "promptSubmitCount",
+    "generateClickCount",
+    "pasteEventCount",
+    "copyFromResponseCount",
+    "typedCharCountBucket"
+  ],
+  "classes": [
+    "AI_CAPABLE_PAGE",
+    "AI_GENERATION",
+    "AI_INTERACTION",
+    "NON_AI"
+  ],
+  "metrics": {
+    "accuracy": 1.0,
+    "classificationReport": {
+      "AI_CAPABLE_PAGE": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 100.0
+      },
+      "AI_GENERATION": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 100.0
+      },
+      "AI_INTERACTION": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 100.0
+      },
+      "NON_AI": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 100.0
+      },
+      "accuracy": 1.0,
+      "macro avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 400.0
+      },
+      "weighted avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 400.0
+      }
+    },
+    "confusionMatrix": [
+      [
+        100,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        100,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        100,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        100
+      ]
+    ]
+  }
+}
