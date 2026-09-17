@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow Sentinel</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="card">
+    <header class="header">
+      <div class="shield-badge">🛡️</div>
+      <h1>Shadow Sentinel</h1>
+    </header>
+    <div class="status-box">
+      <div class="status-indicator active"></div>
+      <span id="status-text">Extension Active</span>
+    </div>
+    <div class="info-section">
+      <div class="info-row">
+        <span>Backend:</span>
+        <span class="badge" id="backend-status">Ready</span>
+      </div>
+      <div class="info-row">
+        <span>ML Service:</span>
+        <span class="badge" id="ml-status">Ready</span>
+      </div>
+    </div>
+    <button id="check-btn" class="action-btn">Check Status</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
