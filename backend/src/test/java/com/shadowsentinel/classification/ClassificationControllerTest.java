@@ -7,6 +7,7 @@ import com.shadowsentinel.auth.UserRepository;
 import com.shadowsentinel.auth.security.JwtService;
 import com.shadowsentinel.browser.*;
 import com.shadowsentinel.classification.dto.ClassificationEvidenceRequest;
+import com.shadowsentinel.classification.ml.MlPrediction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,8 +20,12 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -50,6 +55,12 @@ class ClassificationControllerTest {
     private ClassificationEvidenceRepository evidenceRepository;
 
     @Autowired
+    private ClassificationResultRepository resultRepository;
+
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private com.shadowsentinel.classification.ml.MlClient mlClient;
+
+    @Autowired
     private JwtService jwtService;
 
     @Autowired
@@ -63,6 +74,7 @@ class ClassificationControllerTest {
 
     @BeforeEach
     void setUp() {
+        resultRepository.deleteAll();
         evidenceRepository.deleteAll();
         activityRepository.deleteAll();
         sessionRepository.deleteAll();
@@ -248,5 +260,141 @@ class ClassificationControllerTest {
                 .andExpect(jsonPath("$.status", is(403)))
                 .andExpect(jsonPath("$.error", is("Forbidden")))
                 .andExpect(jsonPath("$.message", containsString("Cannot submit classification evidence for another user's activity")));
+    }
+
+    @Test
+    @DisplayName("POST /api/classification/evidence calls ML service and persists ClassificationResult")
+    void submitEvidence_TriggersMlPrediction_PersistsResult() throws Exception {
+        when(mlClient.predict(any())).thenReturn(MlPrediction.builder()
+                .classLabel(ClassLabel.AI_GENERATION)
+                .confidence(0.98)
+                .modelVersion("v1")
+                .build());
+
+        ClassificationEvidenceRequest request = ClassificationEvidenceRequest.builder()
+                .activityId(activityA.getId())
+                .schemaVersion("v1")
+                .capturedAt(Instant.now())
+                .domainLength(11)
+                .visitCount(3)
+                .durationSeconds(120)
+                .isKnownAiDomain(true)
+                .hourOfDay(14)
+                .pathDepth(2)
+                .chatInterfacePresent(true)
+                .promptInputPresent(true)
+                .generateControlPresent(true)
+                .regenerateControlPresent(true)
+                .aiTermCount(5)
+                .streamingOutputPresent(true)
+                .fileUploadPresent(false)
+                .promptSubmitCount(2)
+                .generateClickCount(2)
+                .pasteEventCount(1)
+                .copyFromResponseCount(1)
+                .typedCharCountBucket(2)
+                .build();
+
+        mockMvc.perform(post("/api/classification/evidence")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        Optional<ClassificationResult> resultOpt = resultRepository.findByActivityId(activityA.getId());
+        assertTrue(resultOpt.isPresent(), "ClassificationResult should be persisted");
+        ClassificationResult result = resultOpt.get();
+        assertEquals(ClassLabel.AI_GENERATION, result.getClassLabel());
+        assertEquals(0.98, result.getConfidence(), 0.001);
+        assertEquals("v1", result.getModelVersion());
+    }
+
+    @Test
+    @DisplayName("POST /api/classification/evidence persists evidence even when ML service throws an exception")
+    void submitEvidence_WhenMlClientThrows_EvidenceStillPersisted() throws Exception {
+        when(mlClient.predict(any())).thenThrow(new RuntimeException("ML service timeout"));
+
+        ClassificationEvidenceRequest request = ClassificationEvidenceRequest.builder()
+                .activityId(activityA.getId())
+                .domainLength(12)
+                .hourOfDay(11)
+                .typedCharCountBucket(1)
+                .build();
+
+        mockMvc.perform(post("/api/classification/evidence")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        // Evidence was saved successfully
+        assertTrue(evidenceRepository.existsByActivityId(activityA.getId()), "Evidence should be persisted");
+        // But no ClassificationResult
+        assertFalse(resultRepository.findByActivityId(activityA.getId()).isPresent(), "Result should not be saved if ML fails");
+    }
+
+    @Test
+    @DisplayName("GET /api/classification/results/{activityId} returns classification result")
+    void getResult_Success() throws Exception {
+        ClassificationResult result = resultRepository.save(ClassificationResult.builder()
+                .activity(activityA)
+                .classLabel(ClassLabel.AI_INTERACTION)
+                .confidence(0.92)
+                .modelVersion("v1")
+                .build());
+
+        mockMvc.perform(get("/api/classification/results/" + activityA.getId())
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(result.getId().intValue())))
+                .andExpect(jsonPath("$.activityId", is(activityA.getId().intValue())))
+                .andExpect(jsonPath("$.classLabel", is("AI_INTERACTION")))
+                .andExpect(jsonPath("$.confidence", is(0.92)))
+                .andExpect(jsonPath("$.modelVersion", is("v1")));
+    }
+
+    @Test
+    @DisplayName("GET /api/classification/results paged and filtered by label")
+    void getResults_Paged_Filtered() throws Exception {
+        resultRepository.save(ClassificationResult.builder()
+                .activity(activityA)
+                .classLabel(ClassLabel.AI_GENERATION)
+                .confidence(0.95)
+                .modelVersion("v1")
+                .build());
+
+        // Filter for matching label
+        mockMvc.perform(get("/api/classification/results")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .param("label", "AI_GENERATION"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].classLabel", is("AI_GENERATION")));
+
+        // Filter for non-matching label
+        mockMvc.perform(get("/api/classification/results")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .param("label", "NON_AI"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/classification/results/{activityId} cross-user returns 403 Forbidden")
+    void crossUser_GetResult_Returns403() throws Exception {
+        resultRepository.save(ClassificationResult.builder()
+                .activity(activityA)
+                .classLabel(ClassLabel.AI_CAPABLE_PAGE)
+                .confidence(0.85)
+                .modelVersion("v1")
+                .build());
+
+        // User B attempts to access User A's result
+        mockMvc.perform(get("/api/classification/results/" + activityA.getId())
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status", is(403)))
+                .andExpect(jsonPath("$.error", is("Forbidden")))
+                .andExpect(jsonPath("$.message", containsString("Cannot access classification result for another user's activity")));
     }
 }
