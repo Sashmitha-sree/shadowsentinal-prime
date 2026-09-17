@@ -248,6 +248,43 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.input-error {
+  border-color: var(--severity-critical) !important;
+}
+
+.field-error {
+  color: var(--severity-critical);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.auth-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0;
+  text-decoration: underline;
+  transition: color 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-link:hover {
+  color: var(--accent-hover);
+}
+
 /* Top Nav */
 .top-nav {
   display: flex;

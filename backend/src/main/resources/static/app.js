@@ -9,10 +9,28 @@
 
   // DOM Elements
   const loginModal = document.getElementById('login-modal');
+  const authTitle = document.getElementById('auth-title');
+  const authSubtitle = document.getElementById('auth-subtitle');
   const loginForm = document.getElementById('login-form');
+  const loginFeedback = document.getElementById('login-feedback');
   const loginEmail = document.getElementById('login-email');
   const loginPassword = document.getElementById('login-password');
   const loginError = document.getElementById('login-error');
+  const showSignupBtn = document.getElementById('show-signup-btn');
+
+  // Signup DOM Elements
+  const signupForm = document.getElementById('signup-form');
+  const signupEmail = document.getElementById('signup-email');
+  const signupPassword = document.getElementById('signup-password');
+  const signupConfirmPassword = document.getElementById('signup-confirm-password');
+  const signupEmailError = document.getElementById('signup-email-error');
+  const signupPasswordError = document.getElementById('signup-password-error');
+  const signupConfirmError = document.getElementById('signup-confirm-error');
+  const signupError = document.getElementById('signup-error');
+  const signupSuccess = document.getElementById('signup-success');
+  const signupBtn = document.getElementById('signup-btn');
+  const showLoginBtn = document.getElementById('show-login-btn');
+
   const appShell = document.getElementById('app-shell');
   const logoutBtn = document.getElementById('logout-btn');
   const userRoleBadge = document.getElementById('user-role-badge');
@@ -82,6 +100,35 @@
     // Login form
     loginForm.addEventListener('submit', handleLogin);
 
+    // Signup form
+    signupForm.addEventListener('submit', handleSignup);
+
+    // Auth mode toggle buttons
+    showSignupBtn.addEventListener('click', switchToSignup);
+    showLoginBtn.addEventListener('click', () => switchToLogin());
+
+    // Live validation cleanup on input
+    signupEmail.addEventListener('input', () => {
+      signupEmailError.classList.add('hidden');
+      signupEmailError.textContent = '';
+      signupEmail.classList.remove('input-error');
+      signupError.classList.add('hidden');
+    });
+
+    signupPassword.addEventListener('input', () => {
+      signupPasswordError.classList.add('hidden');
+      signupPasswordError.textContent = '';
+      signupPassword.classList.remove('input-error');
+      signupError.classList.add('hidden');
+    });
+
+    signupConfirmPassword.addEventListener('input', () => {
+      signupConfirmError.classList.add('hidden');
+      signupConfirmError.textContent = '';
+      signupConfirmPassword.classList.remove('input-error');
+      signupError.classList.add('hidden');
+    });
+
     // Logout
     logoutBtn.addEventListener('click', () => {
       clearToken();
@@ -120,11 +167,13 @@
     }
   }
 
-  // Auth flow
+  // Auth flow - Login
   async function handleLogin(e) {
     e.preventDefault();
     loginError.classList.add('hidden');
     loginError.textContent = '';
+    loginFeedback.classList.add('hidden');
+    loginFeedback.textContent = '';
 
     const email = loginEmail.value.trim();
     const password = loginPassword.value;
@@ -151,6 +200,199 @@
     }
   }
 
+  // Client-side validation for signup
+  function validateSignupForm() {
+    let isValid = true;
+
+    // Reset previous inline errors
+    signupEmailError.classList.add('hidden');
+    signupEmailError.textContent = '';
+    signupEmail.classList.remove('input-error');
+
+    signupPasswordError.classList.add('hidden');
+    signupPasswordError.textContent = '';
+    signupPassword.classList.remove('input-error');
+
+    signupConfirmError.classList.add('hidden');
+    signupConfirmError.textContent = '';
+    signupConfirmPassword.classList.remove('input-error');
+
+    signupError.classList.add('hidden');
+    signupError.textContent = '';
+
+    const email = signupEmail.value.trim();
+    const password = signupPassword.value;
+    const confirmPassword = signupConfirmPassword.value;
+
+    // 1. Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      signupEmailError.textContent = 'Email address is required';
+      signupEmailError.classList.remove('hidden');
+      signupEmail.classList.add('input-error');
+      isValid = false;
+    } else if (!emailRegex.test(email)) {
+      signupEmailError.textContent = 'Please enter a valid email address';
+      signupEmailError.classList.remove('hidden');
+      signupEmail.classList.add('input-error');
+      isValid = false;
+    }
+
+    // 2. Password validation (minimum 8 characters)
+    if (!password) {
+      signupPasswordError.textContent = 'Password is required';
+      signupPasswordError.classList.remove('hidden');
+      signupPassword.classList.add('input-error');
+      isValid = false;
+    } else if (password.length < 8) {
+      signupPasswordError.textContent = 'Password must be at least 8 characters long';
+      signupPasswordError.classList.remove('hidden');
+      signupPassword.classList.add('input-error');
+      isValid = false;
+    }
+
+    // 3. Confirm password validation (must match password)
+    if (!confirmPassword) {
+      signupConfirmError.textContent = 'Please confirm your password';
+      signupConfirmError.classList.remove('hidden');
+      signupConfirmPassword.classList.add('input-error');
+      isValid = false;
+    } else if (confirmPassword !== password) {
+      signupConfirmError.textContent = 'Passwords do not match';
+      signupConfirmError.classList.remove('hidden');
+      signupConfirmPassword.classList.add('input-error');
+      isValid = false;
+    }
+
+    return isValid;
+  }
+
+  // Auth flow - Signup
+  async function handleSignup(e) {
+    e.preventDefault();
+
+    if (!validateSignupForm()) {
+      return;
+    }
+
+    const email = signupEmail.value.trim();
+    const password = signupPassword.value;
+
+    signupBtn.disabled = true;
+    signupBtn.textContent = 'Creating Account...';
+    signupError.classList.add('hidden');
+    signupError.textContent = '';
+    signupSuccess.classList.add('hidden');
+    signupSuccess.textContent = '';
+
+    try {
+      const resp = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        const msg = errData.message || (resp.status === 409 ? `User with email '${email}' already exists` : 'Registration failed');
+        throw new Error(msg);
+      }
+
+      // On success: show a brief success message, then automatically switch back to login form
+      signupSuccess.textContent = 'Account created successfully! Switching to sign in...';
+      signupSuccess.classList.remove('hidden');
+
+      setTimeout(() => {
+        switchToLogin(email, 'Account created successfully! Please enter your password to sign in.');
+      }, 1200);
+
+    } catch (err) {
+      signupError.textContent = err.message || 'Registration failed';
+      signupError.classList.remove('hidden');
+    } finally {
+      signupBtn.disabled = false;
+      signupBtn.textContent = 'Sign Up';
+    }
+  }
+
+  // Form swapping helpers
+  function switchToSignup() {
+    loginForm.classList.add('hidden');
+    signupForm.classList.remove('hidden');
+
+    authTitle.textContent = 'Create an Account';
+    authSubtitle.textContent = 'Sign up for Shadow Sentinel security observability.';
+
+    if (loginEmail.value.trim() && !signupEmail.value.trim()) {
+      signupEmail.value = loginEmail.value.trim();
+    }
+
+    loginError.classList.add('hidden');
+    loginError.textContent = '';
+    loginFeedback.classList.add('hidden');
+    loginFeedback.textContent = '';
+
+    resetSignupForm(false);
+    if (signupEmail.value) {
+      signupPassword.focus();
+    } else {
+      signupEmail.focus();
+    }
+  }
+
+  function switchToLogin(prefillEmail = '', feedbackMessage = '') {
+    signupForm.classList.add('hidden');
+    loginForm.classList.remove('hidden');
+
+    authTitle.textContent = 'Enterprise Security Console';
+    authSubtitle.textContent = 'Sign in to monitor AI activity, risk assessments, and policies.';
+
+    resetSignupForm(true);
+
+    loginError.classList.add('hidden');
+    loginError.textContent = '';
+
+    if (feedbackMessage) {
+      loginFeedback.textContent = feedbackMessage;
+      loginFeedback.classList.remove('hidden');
+    } else {
+      loginFeedback.classList.add('hidden');
+      loginFeedback.textContent = '';
+    }
+
+    if (prefillEmail) {
+      loginEmail.value = prefillEmail;
+      loginPassword.value = '';
+      loginPassword.focus();
+    } else {
+      loginEmail.focus();
+    }
+  }
+
+  function resetSignupForm(clearInputs = true) {
+    if (clearInputs) {
+      signupEmail.value = '';
+      signupPassword.value = '';
+      signupConfirmPassword.value = '';
+    }
+    signupEmailError.classList.add('hidden');
+    signupEmailError.textContent = '';
+    signupEmail.classList.remove('input-error');
+
+    signupPasswordError.classList.add('hidden');
+    signupPasswordError.textContent = '';
+    signupPassword.classList.remove('input-error');
+
+    signupConfirmError.classList.add('hidden');
+    signupConfirmError.textContent = '';
+    signupConfirmPassword.classList.remove('input-error');
+
+    signupError.classList.add('hidden');
+    signupError.textContent = '';
+    signupSuccess.classList.add('hidden');
+    signupSuccess.textContent = '';
+  }
+
   async function fetchCurrentUser() {
     const resp = await apiFetch('/api/auth/me');
     if (!resp.ok) throw new Error('Failed to load user profile');
@@ -169,6 +411,7 @@
   }
 
   function showLogin() {
+    switchToLogin();
     loginModal.classList.remove('hidden');
     appShell.classList.add('hidden');
     drawer.classList.add('hidden');

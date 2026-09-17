@@ -13,10 +13,13 @@
     <div class="modal-card">
       <div class="modal-header">
         <div class="brand-badge">SHADOW SENTINEL</div>
-        <h2>Enterprise Security Console</h2>
-        <p class="subtitle">Sign in to monitor AI activity, risk assessments, and policies.</p>
+        <h2 id="auth-title">Enterprise Security Console</h2>
+        <p id="auth-subtitle" class="subtitle">Sign in to monitor AI activity, risk assessments, and policies.</p>
       </div>
+
+      <!-- Login Form -->
       <form id="login-form">
+        <div id="login-feedback" class="form-feedback success hidden"></div>
         <div class="form-group">
           <label for="login-email">Email Address</label>
           <input type="email" id="login-email" required placeholder="analyst@sentinel.local" autocomplete="username">
@@ -27,6 +30,36 @@
         </div>
         <div id="login-error" class="error-msg hidden"></div>
         <button type="submit" id="login-btn" class="btn btn-primary btn-block">Sign In</button>
+        <div class="auth-toggle">
+          <span>Don't have an account?</span>
+          <button type="button" id="show-signup-btn" class="btn-link">Sign up</button>
+        </div>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="signup-form" class="hidden" novalidate>
+        <div class="form-group">
+          <label for="signup-email">Email Address</label>
+          <input type="email" id="signup-email" placeholder="analyst@sentinel.local" autocomplete="username">
+          <div id="signup-email-error" class="field-error hidden"></div>
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" placeholder="•••••••• (min 8 characters)" autocomplete="new-password">
+          <div id="signup-password-error" class="field-error hidden"></div>
+        </div>
+        <div class="form-group">
+          <label for="signup-confirm-password">Confirm Password</label>
+          <input type="password" id="signup-confirm-password" placeholder="••••••••" autocomplete="new-password">
+          <div id="signup-confirm-error" class="field-error hidden"></div>
+        </div>
+        <div id="signup-error" class="error-msg hidden"></div>
+        <div id="signup-success" class="form-feedback success hidden"></div>
+        <button type="submit" id="signup-btn" class="btn btn-primary btn-block">Sign Up</button>
+        <div class="auth-toggle">
+          <span>Already have an account?</span>
+          <button type="button" id="show-login-btn" class="btn-link">Sign in</button>
+        </div>
       </form>
     </div>
   </div>
