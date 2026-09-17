@@ -1,6 +1,6 @@
 {
   "modelVersion": "v1",
-  "trainedAt": "2026-09-17T03:31:43.119611+00:00",
+  "trainedAt": "2026-09-17T04:59:58.596117+00:00",
   "featureOrder": [
     "domainLength",
     "visitCount",
