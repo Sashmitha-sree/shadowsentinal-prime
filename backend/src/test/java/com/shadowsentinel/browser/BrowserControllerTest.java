@@ -47,6 +47,15 @@ class BrowserControllerTest {
     private BrowserActivityRepository activityRepository;
 
     @Autowired
+    private com.shadowsentinel.risk.RiskAssessmentRepository riskAssessmentRepository;
+
+    @Autowired
+    private com.shadowsentinel.classification.ClassificationResultRepository resultRepository;
+
+    @Autowired
+    private com.shadowsentinel.classification.ClassificationEvidenceRepository evidenceRepository;
+
+    @Autowired
     private JwtService jwtService;
 
     @Autowired
@@ -59,6 +68,9 @@ class BrowserControllerTest {
 
     @BeforeEach
     void setUp() {
+        riskAssessmentRepository.deleteAll();
+        resultRepository.deleteAll();
+        evidenceRepository.deleteAll();
         activityRepository.deleteAll();
         sessionRepository.deleteAll();
         userRepository.deleteAll();
