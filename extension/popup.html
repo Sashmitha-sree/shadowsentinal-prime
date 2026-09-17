@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow Sentinel</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo">
+        <span class="shield-icon">🛡️</span>
+        <div>
+          <h1>Shadow Sentinel</h1>
+          <span class="subtext">Zero-Trust AI Telemetry</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Logged Out View -->
+    <section id="login-section" class="card hidden">
+      <h2>Account Login</h2>
+      <p class="section-desc">Authenticate to attach telemetry to your security profile.</p>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="email-input">Email</label>
+          <input type="email" id="email-input" placeholder="analyst@company.com" required>
+        </div>
+        <div class="form-group">
+          <label for="password-input">Password</label>
+          <input type="password" id="password-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" id="login-btn" class="btn btn-primary">Login</button>
+      </form>
+      <div id="login-error" class="error-banner hidden"></div>
+    </section>
+
+    <!-- Logged In View -->
+    <section id="dashboard-section" class="card hidden">
+      <div class="status-header">
+        <div class="status-badge" id="session-status-badge">
+          <span class="status-dot"></span>
+          <span id="session-status-text">Active</span>
+        </div>
+        <button id="logout-btn" class="btn-text">Logout</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Activities Tracked</span>
+          <span class="stat-value" id="activity-count">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Current Session</span>
+          <span class="stat-value small" id="session-id-display">#--</span>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label">
+          <span>Pause Collection</span>
+          <span class="toggle-desc">Temporarily halt telemetry logging</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="pause-toggle">
+          <span class="slider round"></span>
+        </label>
+      </div>
+    </section>
+  </div>
+  <script src="config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
