@@ -1,5 +1,6 @@
 package com.shadowsentinel.risk;
 
+import com.shadowsentinel.auth.Role;
 import com.shadowsentinel.auth.User;
 import com.shadowsentinel.browser.BrowserActivity;
 import com.shadowsentinel.browser.BrowserActivityRepository;
@@ -40,6 +41,7 @@ public class RiskAssessmentService {
     private final RiskEngine riskEngine;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final com.shadowsentinel.audit.AuditService auditService;
+    private final AiDomainRepository aiDomainRepository;
 
     public RiskAssessmentService(RiskAssessmentRepository riskAssessmentRepository,
                                  CompanyPolicyRepository companyPolicyRepository,
@@ -48,7 +50,8 @@ public class RiskAssessmentService {
                                  BrowserActivityRepository activityRepository,
                                  RiskEngine riskEngine,
                                  org.springframework.context.ApplicationEventPublisher eventPublisher,
-                                 com.shadowsentinel.audit.AuditService auditService) {
+                                 com.shadowsentinel.audit.AuditService auditService,
+                                 AiDomainRepository aiDomainRepository) {
         this.riskAssessmentRepository = riskAssessmentRepository;
         this.companyPolicyRepository = companyPolicyRepository;
         this.policyRuleRepository = policyRuleRepository;
@@ -57,6 +60,7 @@ public class RiskAssessmentService {
         this.riskEngine = riskEngine;
         this.eventPublisher = eventPublisher;
         this.auditService = auditService;
+        this.aiDomainRepository = aiDomainRepository;
     }
 
     @Transactional
@@ -82,7 +86,15 @@ public class RiskAssessmentService {
         }
 
         CompanyPolicy policy = resolveActivePolicy(result.getActivity());
-        RiskEngine.Evaluation evaluation = riskEngine.evaluate(evidence, result, policy);
+        String domain = result.getActivity().getDomain();
+        AiDomainStatus domainStatus = AiDomainStatus.UNKNOWN;
+        if (domain != null && !domain.isBlank()) {
+            domainStatus = aiDomainRepository.findByDomain(domain.trim().toLowerCase(java.util.Locale.ROOT))
+                    .map(AiDomain::getStatus)
+                    .orElse(AiDomainStatus.UNKNOWN);
+        }
+
+        RiskEngine.Evaluation evaluation = riskEngine.evaluate(evidence, result, policy, domainStatus);
 
         RiskAssessment assessment = RiskAssessment.builder()
                 .activity(result.getActivity())
@@ -128,7 +140,7 @@ public class RiskAssessmentService {
         BrowserActivity activity = activityRepository.findById(activityId)
                 .orElseThrow(() -> new ResourceNotFoundException("Activity not found with id: " + activityId));
 
-        if (!activity.getSession().getUser().getId().equals(currentUser.getId())) {
+        if (!activity.getSession().getUser().getId().equals(currentUser.getId()) && currentUser.getRole() != Role.ADMIN) {
             throw new AccessDeniedException("Cannot access risk assessment for another user's activity");
         }
 
@@ -145,7 +157,9 @@ public class RiskAssessmentService {
             List<Predicate> predicates = new ArrayList<>();
 
             // User isolation
-            predicates.add(cb.equal(root.get("activity").get("session").get("user").get("id"), currentUser.getId()));
+            if (currentUser.getRole() != Role.ADMIN) {
+                predicates.add(cb.equal(root.get("activity").get("session").get("user").get("id"), currentUser.getId()));
+            }
 
             if (level != null) {
                 predicates.add(cb.equal(root.get("riskLevel"), level));

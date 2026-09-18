@@ -181,16 +181,16 @@ class RiskControllerTest {
         // Trigger assessment
         eventPublisher.publishEvent(new ClassificationCompletedEvent(this, resultA));
 
-        // User A (owner) retrieves assessment
+        // Admin retrieves assessment
         mockMvc.perform(get("/api/risk/" + activityA.getId())
-                        .header("Authorization", "Bearer " + tokenA))
+                        .header("Authorization", "Bearer " + tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activityId", is(activityA.getId().intValue())))
                 .andExpect(jsonPath("$.riskScore", greaterThanOrEqualTo(0)))
                 .andExpect(jsonPath("$.riskLevel", notNullValue()))
                 .andExpect(jsonPath("$.reasoning", containsString("Detected class: AI_GENERATION")));
 
-        // User B (cross-user) attempt returns 403 Forbidden
+        // User B (non-admin) attempt returns 403 Forbidden
         mockMvc.perform(get("/api/risk/" + activityA.getId())
                         .header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isForbidden())
@@ -205,7 +205,7 @@ class RiskControllerTest {
         eventPublisher.publishEvent(new ClassificationCompletedEvent(this, resultA));
 
         mockMvc.perform(get("/api/risk")
-                        .header("Authorization", "Bearer " + tokenA))
+                        .header("Authorization", "Bearer " + tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].activityId", is(activityA.getId().intValue())));

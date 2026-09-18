@@ -82,7 +82,7 @@ class BrowserControllerTest {
         userA = userRepository.save(User.builder()
                 .email("usera@sentinel.local")
                 .passwordHash(passwordEncoder.encode("password123"))
-                .role(Role.USER)
+                .role(Role.ADMIN)
                 .build());
 
         userB = userRepository.save(User.builder()
@@ -263,5 +263,15 @@ class BrowserControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status", is(401)))
                 .andExpect(jsonPath("$.error", is("Unauthorized")));
+    }
+
+    @Test
+    @DisplayName("GET /api/activities with non-admin role returns 403 Forbidden")
+    void getActivities_NonAdmin_Returns403() throws Exception {
+        mockMvc.perform(get("/api/activities")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status", is(403)))
+                .andExpect(jsonPath("$.message", is("Access denied: Admin role required")));
     }
 }

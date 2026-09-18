@@ -30,26 +30,32 @@ class DashboardStaticResourcesTest {
     }
 
     @Test
-    @DisplayName("GET /index.html serves HTML dashboard")
+    @DisplayName("GET /index.html serves HTML dashboard with Team tab")
     void getIndexHtml_ServesIndex() throws Exception {
         mockMvc.perform(get("/index.html"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Shadow Sentinel")));
+                .andExpect(content().string(containsString("Shadow Sentinel")))
+                .andExpect(content().string(containsString("tab-team-btn")))
+                .andExpect(content().string(containsString("team-table")));
     }
 
     @Test
-    @DisplayName("GET /style.css serves dark restrained CSS")
+    @DisplayName("GET /style.css serves dark restrained CSS with online/offline badge styles")
     void getStyleCss_ServesStylesheet() throws Exception {
         mockMvc.perform(get("/style.css"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("--bg-app")));
+                .andExpect(content().string(containsString("--bg-app")))
+                .andExpect(content().string(containsString(".badge-online")))
+                .andExpect(content().string(containsString(".badge-offline")));
     }
 
     @Test
-    @DisplayName("GET /app.js serves dashboard JavaScript application")
+    @DisplayName("GET /app.js serves dashboard JavaScript application with Team tab handling")
     void getAppJs_ServesScript() throws Exception {
         mockMvc.perform(get("/app.js"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Shadow Sentinel Dashboard")));
+                .andExpect(content().string(containsString("Shadow Sentinel Dashboard")))
+                .andExpect(content().string(containsString("fetchTeam")))
+                .andExpect(content().string(containsString("formatRelativeTime")));
     }
 }

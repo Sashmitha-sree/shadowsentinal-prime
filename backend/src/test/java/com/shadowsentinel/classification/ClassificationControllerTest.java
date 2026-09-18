@@ -91,7 +91,7 @@ class ClassificationControllerTest {
         userA = userRepository.save(User.builder()
                 .email("usera@sentinel.local")
                 .passwordHash(passwordEncoder.encode("password123"))
-                .role(Role.USER)
+                .role(Role.ADMIN)
                 .build());
 
         userB = userRepository.save(User.builder()
@@ -403,6 +403,6 @@ class ClassificationControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status", is(403)))
                 .andExpect(jsonPath("$.error", is("Forbidden")))
-                .andExpect(jsonPath("$.message", containsString("Cannot access classification result for another user's activity")));
+                .andExpect(jsonPath("$.message", is("Access denied: Admin role required")));
     }
 }

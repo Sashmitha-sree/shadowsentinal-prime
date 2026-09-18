@@ -15,15 +15,26 @@ public class UserResponse {
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     private Instant createdAt;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant lastSeenAt;
+
+    private Boolean online;
+
     public UserResponse() {
     }
 
     public UserResponse(Long id, String email, Role role, Long companyId, Instant createdAt) {
+        this(id, email, role, companyId, createdAt, null, null);
+    }
+
+    public UserResponse(Long id, String email, Role role, Long companyId, Instant createdAt, Instant lastSeenAt, Boolean online) {
         this.id = id;
         this.email = email;
         this.role = role;
         this.companyId = companyId;
         this.createdAt = createdAt;
+        this.lastSeenAt = lastSeenAt;
+        this.online = online;
     }
 
     public static Builder builder() {
@@ -36,6 +47,8 @@ public class UserResponse {
         private Role role;
         private Long companyId;
         private Instant createdAt;
+        private Instant lastSeenAt;
+        private Boolean online;
 
         public Builder id(Long id) {
             this.id = id;
@@ -62,8 +75,18 @@ public class UserResponse {
             return this;
         }
 
+        public Builder lastSeenAt(Instant lastSeenAt) {
+            this.lastSeenAt = lastSeenAt;
+            return this;
+        }
+
+        public Builder online(Boolean online) {
+            this.online = online;
+            return this;
+        }
+
         public UserResponse build() {
-            return new UserResponse(id, email, role, companyId, createdAt);
+            return new UserResponse(id, email, role, companyId, createdAt, lastSeenAt, online);
         }
     }
 
@@ -105,5 +128,25 @@ public class UserResponse {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Instant getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public void setLastSeenAt(Instant lastSeenAt) {
+        this.lastSeenAt = lastSeenAt;
+    }
+
+    public Boolean getOnline() {
+        return online;
+    }
+
+    public Boolean isOnline() {
+        return online;
+    }
+
+    public void setOnline(Boolean online) {
+        this.online = online;
     }
 }

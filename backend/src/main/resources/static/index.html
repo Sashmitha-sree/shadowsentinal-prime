@@ -82,18 +82,27 @@
       </div>
     </header>
 
+    <!-- Non-admin User Notice (Shown when role is not ADMIN) -->
+    <div id="user-notice-view" class="user-notice-container hidden">
+      <div class="user-notice-card">
+        <div class="user-notice-icon">&#x1F6E1;</div>
+        <p class="user-notice-message">Install the Shadow Sentinel extension and log in there to enable monitoring.</p>
+      </div>
+    </div>
+
     <!-- Sub-header Tabs -->
-    <div class="tab-bar">
+    <div id="tab-bar" class="tab-bar">
       <button class="tab-btn active" data-tab="overview">Overview</button>
       <button class="tab-btn" data-tab="activities">Activities</button>
       <button class="tab-btn" data-tab="alerts">
         Alerts <span id="nav-alert-count" class="badge-count hidden">0</span>
       </button>
       <button class="tab-btn" id="tab-policies-btn" data-tab="policies">Policies</button>
+      <button class="tab-btn" id="tab-team-btn" data-tab="team">Team</button>
     </div>
 
     <!-- Main Container -->
-    <main class="main-content">
+    <main id="main-content" class="main-content">
 
       <!-- Tab 1: Overview -->
       <section id="tab-overview" class="tab-pane active">
@@ -290,6 +299,31 @@
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Tab 5: Team (ADMIN) -->
+      <section id="tab-team" class="tab-pane">
+        <div class="section-toolbar">
+          <div>
+            <h2>Active Extension Users</h2>
+            <p class="section-desc text-muted text-sm">Real-time telemetry and online status for employees using the browser extension.</p>
+          </div>
+          <button id="refresh-team-btn" class="btn btn-secondary btn-sm">Refresh</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="team-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Last Active</th>
+              </tr>
+            </thead>
+            <tbody id="team-table-body">
+              <tr><td colspan="3" class="text-center">Loading team members...</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

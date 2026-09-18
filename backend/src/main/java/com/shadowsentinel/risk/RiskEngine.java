@@ -58,8 +58,16 @@ public class RiskEngine {
     }
 
     public Evaluation evaluate(ClassificationEvidence evidence, ClassificationResult result, CompanyPolicy policy) {
-        String domain = evidence.getActivity() != null ? evidence.getActivity().getDomain() : "";
-        List<PolicyRule> activeRules = policy != null && policy.getRules() != null ? policy.getRules() : List.of();
+        return evaluate(evidence, result, policy, AiDomainStatus.UNKNOWN);
+    }
+
+    public Evaluation evaluate(ClassificationEvidence evidence, ClassificationResult result, CompanyPolicy policy, AiDomainStatus domainStatus) {
+        if (domainStatus == null) {
+            domainStatus = AiDomainStatus.UNKNOWN;
+        }
+
+        String domain = (evidence != null && evidence.getActivity() != null) ? evidence.getActivity().getDomain() : "";
+        List<PolicyRule> activeRules = (policy != null && policy.getRules() != null) ? policy.getRules() : List.of();
 
         List<PolicyRule> matchedRules = new ArrayList<>();
         for (PolicyRule rule : activeRules) {
@@ -68,29 +76,96 @@ public class RiskEngine {
             }
         }
 
-        int baseScore = getBaseScore(result.getClassLabel());
-        int ruleWeightSum = matchedRules.stream().mapToInt(PolicyRule::getScoreWeight).sum();
-        int rawScore = baseScore + ruleWeightSum;
-
-        boolean isLowConfidence = result.getConfidence() < 0.60;
-        int adjustedScore;
-        if (isLowConfidence) {
-            adjustedScore = (int) Math.round(rawScore * 0.7);
-        } else {
-            adjustedScore = rawScore;
-        }
-
-        int finalScore = Math.min(100, Math.max(0, adjustedScore));
-        RiskLevel level = determineRiskLevel(finalScore);
-
         String matchedRuleIds = matchedRules.isEmpty() ? "NONE" :
                 matchedRules.stream().map(r -> r.getRuleKey() != null ? r.getRuleKey() : String.valueOf(r.getId()))
                         .collect(Collectors.joining(","));
 
-        String reasoning = generateReasoning(result, baseScore, matchedRules, rawScore, isLowConfidence, adjustedScore, finalScore, level);
+        ClassLabel label = result != null ? result.getClassLabel() : null;
+        double confidence = result != null ? result.getConfidence() : 1.0;
+        boolean isLowConfidence = confidence < 0.60;
+
+        int finalScore = 0;
+        RiskLevel level = RiskLevel.LOW;
+        String statusLine = "";
+        String scoreCalcText = "";
+
+        // 1. If classification label is NON_AI:
+        //    riskScore = 0, riskLevel = LOW, regardless of any other signal.
+        if (label == null || label == ClassLabel.NON_AI) {
+            finalScore = 0;
+            level = RiskLevel.LOW;
+            statusLine = "Activity classified as non-AI; zero risk assigned.";
+            scoreCalcText = "Score calculation: Non-AI activity -> risk score set to 0.";
+        } else {
+            // 2. If classification label is AI-related:
+            switch (domainStatus) {
+                case BLOCKED -> {
+                    // BLOCKED: riskLevel = CRITICAL, riskScore = 100, regardless of interaction depth or confidence
+                    finalScore = 100;
+                    level = RiskLevel.CRITICAL;
+                    statusLine = "Domain is on the blocked AI list set by admin.";
+                    scoreCalcText = "Score calculation: Blocked AI domain -> risk score set to 100.";
+                }
+                case APPROVED -> {
+                    // APPROVED: base score at 25% weight, rules apply, confidence dampening applies, capped at 49
+                    statusLine = "Domain is approved for AI use; risk capped accordingly.";
+                    int baseScore = getBaseScore(label);
+                    int effectiveBase = (int) Math.round(baseScore * 0.25);
+                    int ruleWeightSum = matchedRules.stream().mapToInt(PolicyRule::getScoreWeight).sum();
+                    int rawScore = effectiveBase + ruleWeightSum;
+
+                    int adjustedScore;
+                    if (isLowConfidence) {
+                        adjustedScore = (int) Math.round(rawScore * 0.7);
+                        scoreCalcText = String.format("Score calculation: (Base (%d) + Rules (%d) = %d) * 0.7 (low-confidence dampening) = %d",
+                                effectiveBase, ruleWeightSum, rawScore, adjustedScore);
+                    } else {
+                        adjustedScore = rawScore;
+                        scoreCalcText = String.format("Score calculation: Base (%d) + Rules (%d) = %d",
+                                effectiveBase, ruleWeightSum, rawScore);
+                    }
+
+                    if (adjustedScore > 49) {
+                        scoreCalcText += " -> capped at 49 (approved domain ceiling)";
+                    }
+                    scoreCalcText += ".";
+
+                    finalScore = Math.min(49, Math.max(0, adjustedScore));
+                    level = determineRiskLevel(finalScore);
+                }
+                case UNKNOWN -> {
+                    // UNKNOWN: base + rules + 15, confidence dampening applies, clamped to 100
+                    statusLine = "Domain has not been classified by admin (unknown AI service); risk score elevated pending review.";
+                    int baseScore = getBaseScore(label);
+                    int ruleWeightSum = matchedRules.stream().mapToInt(PolicyRule::getScoreWeight).sum();
+                    int rawScore = baseScore + ruleWeightSum + 15;
+
+                    int adjustedScore;
+                    if (isLowConfidence) {
+                        adjustedScore = (int) Math.round(rawScore * 0.7);
+                        scoreCalcText = String.format("Score calculation: (Base (%d) + Rules (%d) + Elevation (15) = %d) * 0.7 (low-confidence dampening) = %d",
+                                baseScore, ruleWeightSum, rawScore, adjustedScore);
+                    } else {
+                        adjustedScore = rawScore;
+                        scoreCalcText = String.format("Score calculation: Base (%d) + Rules (%d) + Elevation (15) = %d",
+                                baseScore, ruleWeightSum, rawScore);
+                    }
+
+                    if (adjustedScore > 100) {
+                        scoreCalcText += " -> clamped to 100";
+                    }
+                    scoreCalcText += ".";
+
+                    finalScore = Math.min(100, Math.max(0, adjustedScore));
+                    level = determineRiskLevel(finalScore);
+                }
+            }
+        }
+
+        String reasoning = generateReasoning(result, statusLine, matchedRules, scoreCalcText, level, domainStatus);
 
         int policyVer = policy != null ? policy.getVersion() : 1;
-        String modelVer = result.getModelVersion() != null ? result.getModelVersion() : "v1";
+        String modelVer = (result != null && result.getModelVersion() != null) ? result.getModelVersion() : "v1";
 
         return new Evaluation(finalScore, level, matchedRuleIds, reasoning, policyVer, modelVer);
     }
@@ -180,15 +255,26 @@ public class RiskEngine {
         return Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE).matcher(text).matches();
     }
 
-    private String generateReasoning(ClassificationResult result, int baseScore, List<PolicyRule> matchedRules,
-                                     int rawScore, boolean isLowConfidence, int adjustedScore, int finalScore, RiskLevel level) {
+    private String generateReasoning(ClassificationResult result, String statusLine, List<PolicyRule> matchedRules,
+                                     String scoreCalcText, RiskLevel level, AiDomainStatus domainStatus) {
         StringBuilder sb = new StringBuilder();
-        int confidencePct = (int) Math.round(result.getConfidence() * 100);
-        sb.append("Detected class: ").append(result.getClassLabel())
-                .append(" (confidence: ").append(confidencePct).append("%). ");
-        sb.append("Base score: ").append(baseScore).append(". ");
+        sb.append(statusLine).append("\n");
 
-        if (matchedRules.isEmpty()) {
+        ClassLabel label = result != null ? result.getClassLabel() : null;
+        double confidence = result != null ? result.getConfidence() : 1.0;
+        int confidencePct = (int) Math.round(confidence * 100);
+        sb.append("Detected class: ").append(label)
+                .append(" (confidence: ").append(confidencePct).append("%). ");
+
+        int baseScore = getBaseScore(label);
+        if (domainStatus == AiDomainStatus.APPROVED && label != ClassLabel.NON_AI) {
+            int reducedBase = (int) Math.round(baseScore * 0.25);
+            sb.append("Base score: ").append(reducedBase).append(". ");
+        } else {
+            sb.append("Base score: ").append(baseScore).append(". ");
+        }
+
+        if (matchedRules == null || matchedRules.isEmpty()) {
             sb.append("Matched rules: None. ");
         } else {
             sb.append("Matched rules: ");
@@ -203,20 +289,7 @@ public class RiskEngine {
             sb.append(". ");
         }
 
-        int ruleSum = matchedRules.stream().mapToInt(PolicyRule::getScoreWeight).sum();
-        if (isLowConfidence) {
-            sb.append("Score calculation: (Base (").append(baseScore).append(") + Rules (")
-                    .append(ruleSum).append(") = ").append(rawScore)
-                    .append(") * 0.7 (low-confidence dampening) = ").append(adjustedScore);
-        } else {
-            sb.append("Score calculation: Base (").append(baseScore).append(") + Rules (")
-                    .append(ruleSum).append(") = ").append(rawScore);
-        }
-
-        if (rawScore > 100 || adjustedScore > 100) {
-            sb.append(" -> clamped to 100");
-        }
-        sb.append(". Final risk level: ").append(level).append(".");
+        sb.append(scoreCalcText).append(" Final risk level: ").append(level).append(".");
 
         String reasoning = sb.toString();
         if (reasoning.length() > 1000) {

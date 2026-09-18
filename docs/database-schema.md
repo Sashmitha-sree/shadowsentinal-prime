@@ -16,6 +16,7 @@ This document details the complete relational database schema for the Shadow Sen
   |     role              |
   |     company_id        |
   |     created_at        |
+  |     last_seen_at      |
   +-----------------------+
        |               |
        | 1:N           | 1:N
@@ -106,9 +107,10 @@ Represents registered system users (analysts and administrators).
 | `id` | BIGINT | NO | Auto-Increment | Primary Key |
 | `email` | VARCHAR(255) | NO | | Unique constraint (`UK_users_email`) |
 | `password` | VARCHAR(255) | NO | | BCrypt hashed credential |
-| `role` | VARCHAR(32) | NO | | Enum: `ANALYST`, `ADMIN` |
+| `role` | VARCHAR(32) | NO | | Enum: `ANALYST`, `ADMIN`, `USER` |
 | `company_id` | BIGINT | YES | NULL | Optional enterprise organization reference |
 | `created_at` | TIMESTAMP | NO | `now()` | Immutable creation timestamp |
+| `last_seen_at` | TIMESTAMP | YES | NULL | Telemetry timestamp from extension activity |
 
 - **Foreign Keys**: None
 - **Relationships**:
@@ -313,6 +315,22 @@ Immutable record of security and administrative operations across the platform.
 | `event_type` | VARCHAR(64) | NO | | Enum: `LOGIN`, `LOGIN_FAILED`, `SESSION_STARTED`, `EVIDENCE_INGESTED`, `CLASSIFICATION_CREATED`, `RISK_ASSESSED`, `ALERT_CREATED`, `ALERT_ACKNOWLEDGED`, `POLICY_CHANGED` |
 | `target_id` | VARCHAR(255) | YES | NULL | ID of affected entity (e.g. alertId, activityId) |
 | `details` | VARCHAR(2000) | YES | NULL | Human-readable audit description |
-| `created_at` | TIMESTAMP | NO | `now()` | Immutable timestamp of event |
-
 - **Foreign Keys**: None (preserves audit integrity even if target entities are purged)
+
+---
+
+### 2.11 Table: `ai_domains`
+Registry for tracking and governing AI domains discovered through extension telemetry or registered manually by administrators.
+
+| Column | Type | Nullable | Default | Constraints / Description |
+|---|---|---|---|---|
+| `id` | BIGINT | NO | Auto-Increment | Primary Key |
+| `domain` | VARCHAR(255) | NO | | Unique constraint (`idx_ai_domains_domain`) |
+| `status` | VARCHAR(32) | NO | | Enum: `APPROVED`, `BLOCKED`, `UNKNOWN` |
+| `added_by` | VARCHAR(255) | YES | NULL | Email of admin who registered or updated domain (NULL if auto-discovered) |
+| `notes` | TEXT | YES | NULL | Administrative notes / justification |
+| `first_seen_at` | TIMESTAMP | NO | `now()` | Timestamp when domain was first registered or discovered |
+| `updated_at` | TIMESTAMP | YES | `now()` | Timestamp of last status or notes modification |
+
+- **Foreign Keys**: None
+

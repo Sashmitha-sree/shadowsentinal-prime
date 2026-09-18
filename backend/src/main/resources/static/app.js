@@ -32,12 +32,16 @@
   const showLoginBtn = document.getElementById('show-login-btn');
 
   const appShell = document.getElementById('app-shell');
+  const tabBar = document.getElementById('tab-bar');
+  const mainContent = document.getElementById('main-content');
+  const userNoticeView = document.getElementById('user-notice-view');
   const logoutBtn = document.getElementById('logout-btn');
   const userRoleBadge = document.getElementById('user-role-badge');
   const userEmailDisplay = document.getElementById('user-email-display');
   const tabButtons = document.querySelectorAll('.tab-btn');
   const tabPanes = document.querySelectorAll('.tab-pane');
   const tabPoliciesBtn = document.getElementById('tab-policies-btn');
+  const tabTeamBtn = document.getElementById('tab-team-btn');
   const navAlertCount = document.getElementById('nav-alert-count');
 
   // Drawer Elements
@@ -159,6 +163,10 @@
     document.getElementById('refresh-activities-btn').addEventListener('click', fetchActivities);
     document.getElementById('refresh-alerts-btn').addEventListener('click', fetchAlerts);
     document.getElementById('refresh-policies-btn').addEventListener('click', fetchPolicies);
+    const refreshTeamBtn = document.getElementById('refresh-team-btn');
+    if (refreshTeamBtn) {
+      refreshTeamBtn.addEventListener('click', fetchTeam);
+    }
 
     // Add policy rule form
     const addRuleForm = document.getElementById('add-rule-form');
@@ -405,8 +413,10 @@
     // Admin-only tab visibility
     if (currentUser.role === 'ADMIN') {
       tabPoliciesBtn.classList.remove('hidden');
+      if (tabTeamBtn) tabTeamBtn.classList.remove('hidden');
     } else {
       tabPoliciesBtn.classList.add('hidden');
+      if (tabTeamBtn) tabTeamBtn.classList.add('hidden');
     }
   }
 
@@ -420,10 +430,25 @@
   function showApp() {
     loginModal.classList.add('hidden');
     appShell.classList.remove('hidden');
-    switchTab(activeTab);
+
+    if (currentUser && currentUser.role === 'ADMIN') {
+      if (userNoticeView) userNoticeView.classList.add('hidden');
+      if (tabBar) tabBar.classList.remove('hidden');
+      if (mainContent) mainContent.classList.remove('hidden');
+      switchTab(activeTab);
+    } else {
+      // Non-admin user: hide dashboard tabs and main content, show extension notice only
+      if (tabBar) tabBar.classList.add('hidden');
+      if (mainContent) mainContent.classList.add('hidden');
+      if (userNoticeView) userNoticeView.classList.remove('hidden');
+    }
   }
 
   function switchTab(tabId) {
+    if (!currentUser || currentUser.role !== 'ADMIN') {
+      return;
+    }
+
     activeTab = tabId;
 
     tabButtons.forEach(btn => {
@@ -442,6 +467,8 @@
       fetchAlerts();
     } else if (tabId === 'policies') {
       fetchPolicies();
+    } else if (tabId === 'team') {
+      fetchTeam();
     }
   }
 
@@ -954,6 +981,83 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  // TAB 5: Team (ADMIN)
+  async function fetchTeam() {
+    if (!currentUser || currentUser.role !== 'ADMIN') return;
+    const tbody = document.getElementById('team-table-body');
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center">Loading team members...</td></tr>';
+
+    try {
+      const resp = await apiFetch('/api/users');
+      if (!resp.ok) {
+        throw new Error('Failed to load team members');
+      }
+      const users = await resp.json();
+
+      if (!Array.isArray(users) || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No employee accounts found.</td></tr>';
+        return;
+      }
+
+      // Sort online users to the top, then by most recent lastSeenAt, then by email
+      users.sort((a, b) => {
+        const onlineA = !!a.online;
+        const onlineB = !!b.online;
+        if (onlineA !== onlineB) {
+          return onlineA ? -1 : 1;
+        }
+        const timeA = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+        const timeB = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+        if (timeA !== timeB) {
+          return timeB - timeA;
+        }
+        return (a.email || '').localeCompare(b.email || '');
+      });
+
+      tbody.innerHTML = users.map(user => {
+        const statusBadge = user.online
+          ? '<span class="badge badge-online">Online</span>'
+          : '<span class="badge badge-offline">Offline</span>';
+        const relativeTime = formatRelativeTime(user.lastSeenAt);
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(user.email)}</strong></td>
+            <td>${statusBadge}</td>
+            <td class="text-muted text-sm">${escapeHtml(relativeTime)}</td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Failed to load team members.</td></tr>';
+    }
+  }
+
+  function formatRelativeTime(isoString) {
+    if (!isoString) return 'Never';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return 'Never';
+    const now = new Date();
+    const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffSeconds < 0) return 'Just now';
+    if (diffSeconds < 60) return `${diffSeconds <= 10 ? 'Just now' : diffSeconds + ' seconds ago'}`;
+
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes === 1) return '1 minute ago';
+    if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours === 1) return '1 hour ago';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return '1 day ago';
+    if (diffDays < 30) return `${diffDays} days ago`;
+
+    return date.toLocaleDateString();
   }
 
   // Start app

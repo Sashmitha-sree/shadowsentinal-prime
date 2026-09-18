@@ -143,6 +143,9 @@ body {
 .badge-ai-interaction { background-color: rgba(139, 92, 246, 0.15); color: var(--label-interaction); border-color: rgba(139, 92, 246, 0.4); }
 .badge-ai-generation { background-color: rgba(236, 72, 153, 0.15); color: var(--label-generation); border-color: rgba(236, 72, 153, 0.4); }
 
+.badge-online { background-color: rgba(16, 185, 129, 0.15); color: var(--severity-low); border-color: rgba(16, 185, 129, 0.4); }
+.badge-offline { background-color: rgba(100, 116, 139, 0.15); color: var(--text-muted); border-color: rgba(100, 116, 139, 0.3); }
+
 /* Modal (Login) */
 .modal-overlay {
   position: fixed;
@@ -817,3 +820,33 @@ body {
 }
 .evidence-item span { color: var(--text-secondary); }
 .evidence-item strong { color: var(--text-primary); }
+
+/* Non-admin User Notice */
+.user-notice-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 120px);
+  padding: 32px 16px;
+}
+
+.user-notice-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+  max-width: 480px;
+  text-align: center;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.user-notice-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.user-notice-message {
+  font-size: 15px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}

@@ -1,9 +1,9 @@
 # Risk Model & Scoring Specification
 
 ## 1. Overview
-The Shadow Sentinel Risk Engine is a 100% deterministic, rule-based scoring engine designed to assess the enterprise risk associated with user browser activity involving Generative AI services.
+The Shadow Sentinel Risk Engine is a 100% deterministic, explainable risk scoring engine designed to assess enterprise risk associated with employee browser activities.
 
-It combines the machine-learning classification label with active corporate policy rules, applies confidence-adjusted weighting, and outputs an explainable risk score, risk level, and human-readable reasoning summary.
+In this model, **AI Domain Status (`ai_domains`) is the PRIMARY factor** determining risk, governing whether an activity is capped, elevated, or unconditionally marked as a critical policy violation. Pure interaction-depth scoring is subordinated to administrative domain governance.
 
 ---
 
@@ -12,67 +12,117 @@ The base risk score is determined directly from the activity's classified `Class
 
 | Classification Label | Base Risk Score | Description |
 |---|---|---|
-| **`NON_AI`** | `0` | Standard web traffic; no AI risk. |
-| **`AI_CAPABLE_PAGE`** | `10` | Passive presence on AI platforms or tools. |
-| **`AI_INTERACTION`** | `25` | User prompted, submitted text, or clicked interactive controls. |
-| **`AI_GENERATION`** | `40` | AI output was generated and consumed (copied/streamed). |
+| **`NON_AI`** | `0` | Standard web traffic; no AI capabilities detected. |
+| **`AI_CAPABLE_PAGE`** | `10` | Passive presence on AI platform or tool. |
+| **`AI_INTERACTION`** | `25` | User submitted text, prompted, or interacted with AI controls. |
+| **`AI_GENERATION`** | `40` | AI content generated, streamed, or copied. |
 
 ---
 
-## 3. Policy Rule Evaluation & Weights
-Each active policy contains a set of rules. A rule matches an activity if **all specified conditions** are satisfied:
+## 3. Scoring Architecture & Governance Hierarchy
 
-- **`appliesToLabel`**: Null matches any label; otherwise matches if `classificationResult.classLabel == appliesToLabel`.
-- **`domainPattern`**: Null matches any domain; otherwise evaluates as a case-insensitive glob pattern against `activity.domain` (e.g. `*openai.com*`, `*.ai`, `chatgpt.com`).
-- **`minGenerateClicks`**: If set, requires `evidence.generateClickCount >= minGenerateClicks`.
-- **`requiresFileUpload`**: If set to `true`, requires `evidence.fileUploadPresent == true`.
-- **`requiresPasteEvent`**: If set to `true`, requires `evidence.pasteEventCount > 0`.
-
-Each matched rule adds its `scoreWeight` (an integer between 0 and 40) to the risk score:
-$$\text{Matched Weights} = \sum_{r \in \text{MatchedRules}} r.\text{scoreWeight}$$
+### 3.1 Non-AI Activity Rule
+If the classification label is **`NON_AI`**:
+- **`riskScore = 0`**
+- **`riskLevel = LOW`**
+- This applies unconditionally, regardless of policy rules, paste events, uploads, or any domain status. Non-AI traffic can never reach `MEDIUM`, `HIGH`, or `CRITICAL`.
+- Reasoning first line: `"Activity classified as non-AI; zero risk assigned."`
 
 ---
 
-## 4. Score Arithmetic & Confidence Dampening
+### 3.2 AI-Related Activity (`AI_CAPABLE_PAGE`, `AI_INTERACTION`, `AI_GENERATION`)
+For all AI-related classifications, the engine looks up the activity's domain in the `ai_domains` registry. The scoring formula is governed strictly by the domain's status:
 
-1. **Raw Score**:
-   $$\text{RawScore} = \text{BaseScore} + \text{Matched Weights}$$
+#### A. Status: `BLOCKED`
+- **`riskScore = 100`**
+- **`riskLevel = CRITICAL`**
+- **Immediate Violation**: Overrides interaction depth, matched rules, and confidence dampening. Using a blocked AI service at all constitutes a finding.
+- **Confidence Dampening**: **EXEMPT**. Always remains `100` / `CRITICAL` even if ML confidence is `< 0.60`.
+- Reasoning first line: `"Domain is on the blocked AI list set by admin."`
 
-2. **Low-Confidence Dampening**:
-   If the classification confidence is below 0.60 ($< 0.60$), the classification is considered uncertain, and the score is dampened:
-   $$\text{AdjustedScore} = \begin{cases} \text{round}(\text{RawScore} \times 0.7) & \text{if } \text{confidence} < 0.60 \\ \text{RawScore} & \text{if } \text{confidence} \ge 0.60 \end{cases}$$
+#### B. Status: `APPROVED`
+- **Capped at `MEDIUM`**: Even with `AI_GENERATION` and maximal rule matches, the risk score is capped so it never exceeds `49`.
+- **Reduced Scoring Formula**:
+  1. Base score scaled to 25% weight:
+     $$\text{EffectiveBaseScore} = \text{round}(\text{BaseScore} \times 0.25)$$
+     *(e.g., `AI_CAPABLE_PAGE`: 3, `AI_INTERACTION`: 6, `AI_GENERATION`: 10)*
+  2. Matched policy rule weights are summed:
+     $$\text{RawScore} = \text{EffectiveBaseScore} + \sum \text{RuleWeights}$$
+  3. Low-confidence dampening applies if confidence $< 0.60$:
+     $$\text{AdjustedScore} = \begin{cases} \text{round}(\text{RawScore} \times 0.7) & \text{if } \text{confidence} < 0.60 \\ \text{RawScore} & \text{otherwise} \end{cases}$$
+  4. Final score clamped to `49` (MEDIUM ceiling):
+     $$\text{FinalScore} = \min(49, \max(0, \text{AdjustedScore}))$$
+- Reasoning first line: `"Domain is approved for AI use; risk capped accordingly."`
 
-3. **Clamping**:
-   $$\text{FinalScore} = \min(100, \max(0, \text{AdjustedScore}))$$
+#### C. Status: `UNKNOWN`
+*(Includes unreviewed domains auto-inserted upon detection or unlisted domains)*
+- **Elevation Formula**:
+  1. Standard base score table applies.
+  2. Matched policy rule weights are added.
+  3. A flat **`+15` elevation** is added to reflect the fact that this AI service has not been vetted or approved by administrators:
+     $$\text{RawScore} = \text{BaseScore} + \sum \text{RuleWeights} + 15$$
+  4. Low-confidence dampening applies if confidence $< 0.60$:
+     $$\text{AdjustedScore} = \begin{cases} \text{round}(\text{RawScore} \times 0.7) & \text{if } \text{confidence} < 0.60 \\ \text{RawScore} & \text{otherwise} \end{cases}$$
+  5. Final score clamped to `100`:
+     $$\text{FinalScore} = \min(100, \max(0, \text{AdjustedScore}))$$
+- Reasoning first line: `"Domain has not been classified by admin (unknown AI service); risk score elevated pending review."`
 
 ---
 
-## 5. Risk Level Boundaries
+## 4. Policy Rule Matching
 
-The final clamped score is mapped to a discrete `RiskLevel`:
+Active policy rules continue to evaluate specific interaction depth signals:
+- **`appliesToLabel`**: Rule applies only to specified label (or all if null).
+- **`domainPattern`**: Glob pattern match on activity domain.
+- **`minGenerateClicks`**: Requires `evidence.generateClickCount >= minGenerateClicks`.
+- **`requiresFileUpload`**: Requires `evidence.fileUploadPresent == true`.
+- **`requiresPasteEvent`**: Requires `evidence.pasteEventCount > 0`.
+
+Rule weights (0 to 40) contribute to `RawScore` for `APPROVED` and `UNKNOWN` domains.
+
+---
+
+## 5. Confidence Dampening Summary
+
+If classification confidence is `< 0.60`:
+- **`BLOCKED`**: **No dampening**. Always stays 100 / `CRITICAL`.
+- **`APPROVED`**: Multiplies raw score by `0.7` before capping at `49`.
+- **`UNKNOWN`**: Multiplies raw score by `0.7` before clamping at `100`.
+- **`NON_AI`**: Score is already 0; remains 0 / `LOW`.
+
+---
+
+## 6. Risk Level Boundaries
 
 | Score Range | Risk Level | Description |
 |---|---|---|
-| **0 – 24** | **`LOW`** | Benign or low-risk usage; standard monitoring. |
-| **25 – 49** | **`MEDIUM`** | Moderate risk; basic AI interactions or unverified queries. |
-| **50 – 74** | **`HIGH`** | Elevated risk; file uploads, pasting data, or high usage volume. |
-| **75 – 100** | **`CRITICAL`** | Severe risk; sensitive data exfiltration or policy violations. |
+| **0 – 24** | **`LOW`** | Benign or non-AI usage; standard telemetry. |
+| **25 – 49** | **`MEDIUM`** | Moderate risk; approved AI activity or minor interactions. |
+| **50 – 74** | **`HIGH`** | Elevated risk; unreviewed AI interactions, file uploads, pastes. |
+| **75 – 100** | **`CRITICAL`** | Severe risk; blocked AI domain usage or extreme unvetted activity. |
 
 ### Exact Boundary Test Matrix:
+- Score `0` &rarr; `LOW`
 - Score `24` &rarr; `LOW`
 - Score `25` &rarr; `MEDIUM`
-- Score `49` &rarr; `MEDIUM`
+- Score `49` &rarr; `MEDIUM` (Approved AI maximum)
 - Score `50` &rarr; `HIGH`
 - Score `74` &rarr; `HIGH`
 - Score `75` &rarr; `CRITICAL`
+- Score `100` &rarr; `CRITICAL` (Blocked AI standard)
 
 ---
 
-## 6. Explainability Requirement
+## 7. Explainability & Reasoning Format
 
-Every risk assessment stores a human-readable `reasoning` string (max 1000 characters) designed for non-technical security reviewers. It details:
-1. **Detected Class & Confidence**: e.g., `AI_GENERATION (confidence: 95%)`.
-2. **Base Risk Contribution**: e.g., `Base Score: 40`.
-3. **Matched Policy Rules**: Description and added weight for each triggered rule.
-4. **Score Arithmetic**: Explicit step-by-step formula including any low-confidence adjustments.
-5. **Final Assessment**: Clamped score and assigned risk level.
+Every `RiskAssessment` records an explainable `reasoning` string (max 1000 characters). The domain status **must appear as the explicit first line of the reasoning**, before listing matched rules or arithmetic:
+
+1. **First Line**: Domain status explanation:
+   - `BLOCKED`: `"Domain is on the blocked AI list set by admin."`
+   - `APPROVED`: `"Domain is approved for AI use; risk capped accordingly."`
+   - `UNKNOWN`: `"Domain has not been classified by admin (unknown AI service); risk score elevated pending review."`
+   - `NON_AI`: `"Activity classified as non-AI; zero risk assigned."`
+2. **Second Line**: Classification label, confidence percentage, and effective base score.
+3. **Third Line**: Matched rules and weights.
+4. **Fourth Line**: Detailed score arithmetic (including dampening and domain ceilings).
+5. **Final Line**: Clamped final score and `RiskLevel`.

@@ -86,7 +86,7 @@ class AlertControllerTest {
         userA = userRepository.save(User.builder()
                 .email("usera@sentinel.local")
                 .passwordHash(passwordEncoder.encode("password123"))
-                .role(Role.USER)
+                .role(Role.ADMIN)
                 .build());
 
         userB = userRepository.save(User.builder()
@@ -315,5 +315,15 @@ class AlertControllerTest {
                         .header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status", is(403)));
+    }
+
+    @Test
+    @DisplayName("GET /api/alerts with non-admin role returns 403 Forbidden")
+    void getAlerts_NonAdmin_Returns403() throws Exception {
+        mockMvc.perform(get("/api/alerts")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status", is(403)))
+                .andExpect(jsonPath("$.message", is("Access denied: Admin role required")));
     }
 }

@@ -1,5 +1,6 @@
 package com.shadowsentinel.browser;
 
+import com.shadowsentinel.auth.Role;
 import com.shadowsentinel.auth.User;
 import com.shadowsentinel.browser.dto.*;
 import com.shadowsentinel.common.ResourceNotFoundException;
@@ -51,7 +52,7 @@ public class BrowserService {
         BrowserSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found with id: " + sessionId));
 
-        if (!session.getUser().getId().equals(currentUser.getId())) {
+        if (!session.getUser().getId().equals(currentUser.getId()) && currentUser.getRole() != Role.ADMIN) {
             throw new AccessDeniedException("You do not have permission to access this session");
         }
 
@@ -103,7 +104,9 @@ public class BrowserService {
             List<Predicate> predicates = new ArrayList<>();
 
             // User ownership predicate
-            predicates.add(cb.equal(root.get("session").get("user").get("id"), currentUser.getId()));
+            if (currentUser.getRole() != Role.ADMIN) {
+                predicates.add(cb.equal(root.get("session").get("user").get("id"), currentUser.getId()));
+            }
 
             if (sessionId != null) {
                 predicates.add(cb.equal(root.get("session").get("id"), sessionId));

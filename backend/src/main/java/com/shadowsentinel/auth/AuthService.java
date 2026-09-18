@@ -96,6 +96,7 @@ public class AuthService {
                 .role(user.getRole())
                 .companyId(user.getCompanyId())
                 .createdAt(user.getCreatedAt())
+                .lastSeenAt(user.getLastSeenAt())
                 .build();
     }
 }

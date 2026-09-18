@@ -29,16 +29,24 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "last_seen_at")
+    private Instant lastSeenAt;
+
     public User() {
     }
 
     public User(Long id, String email, String passwordHash, Role role, Long companyId, Instant createdAt) {
+        this(id, email, passwordHash, role, companyId, createdAt, null);
+    }
+
+    public User(Long id, String email, String passwordHash, Role role, Long companyId, Instant createdAt, Instant lastSeenAt) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
         this.companyId = companyId;
         this.createdAt = createdAt;
+        this.lastSeenAt = lastSeenAt;
     }
 
     @PrePersist
@@ -59,6 +67,7 @@ public class User {
         private Role role;
         private Long companyId;
         private Instant createdAt;
+        private Instant lastSeenAt;
 
         public Builder id(Long id) {
             this.id = id;
@@ -90,8 +99,13 @@ public class User {
             return this;
         }
 
+        public Builder lastSeenAt(Instant lastSeenAt) {
+            this.lastSeenAt = lastSeenAt;
+            return this;
+        }
+
         public User build() {
-            return new User(id, email, passwordHash, role, companyId, createdAt);
+            return new User(id, email, passwordHash, role, companyId, createdAt, lastSeenAt);
         }
     }
 
@@ -141,6 +155,14 @@ public class User {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Instant getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public void setLastSeenAt(Instant lastSeenAt) {
+        this.lastSeenAt = lastSeenAt;
     }
 
     @Override

@@ -40,6 +40,9 @@ public class TestDatabaseCleaner {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
+    @Autowired
+    private com.shadowsentinel.risk.AiDomainRepository aiDomainRepository;
+
     public void clean() {
         alertRepository.deleteAll();
         riskAssessmentRepository.deleteAll();
@@ -49,5 +52,6 @@ public class TestDatabaseCleaner {
         sessionRepository.deleteAll();
         userRepository.deleteAll();
         auditLogRepository.deleteAll();
+        aiDomainRepository.deleteAll();
     }
 }

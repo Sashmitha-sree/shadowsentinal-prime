@@ -123,62 +123,163 @@ class RiskEngineTest {
     }
 
     @Test
-    @DisplayName("Score arithmetic: base + sum of matched rules without dampening")
-    void scoreArithmetic_NormalConfidence() {
-        BrowserActivity activity = BrowserActivity.builder().domain("chatgpt.com").build();
+    @DisplayName("NON_AI never exceeds LOW (score = 0) regardless of domain status, interaction depth, or rules")
+    void nonAi_NeverExceedsLow_RegardlessOfEvidenceAndRules() {
+        BrowserActivity activity = BrowserActivity.builder().domain("blocked-ai.com").build();
+        ClassificationResult result = ClassificationResult.builder()
+                .activity(activity)
+                .classLabel(ClassLabel.NON_AI)
+                .confidence(0.99)
+                .build();
+
+        ClassificationEvidence evidence = ClassificationEvidence.builder()
+                .activity(activity)
+                .fileUploadPresent(true)
+                .pasteEventCount(10)
+                .generateClickCount(20)
+                .build();
+
+        PolicyRule heavyRule = PolicyRule.builder()
+                .ruleKey("HEAVY_RULE")
+                .description("Heavy violation rule")
+                .scoreWeight(40)
+                .build();
+
+        CompanyPolicy policy = CompanyPolicy.builder()
+                .rules(List.of(heavyRule))
+                .build();
+
+        // Even with BLOCKED status and matched rules, NON_AI must produce score 0 and LOW
+        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy, AiDomainStatus.BLOCKED);
+
+        assertEquals(0, eval.getRiskScore());
+        assertEquals(RiskLevel.LOW, eval.getRiskLevel());
+        assertTrue(eval.getReasoning().startsWith("Activity classified as non-AI; zero risk assigned."));
+    }
+
+    @Test
+    @DisplayName("BLOCKED domain is always CRITICAL (score = 100) even with weak evidence and low confidence")
+    void blockedDomain_AlwaysCritical_EvenWithWeakEvidenceAndLowConfidence() {
+        BrowserActivity activity = BrowserActivity.builder().domain("banned-ai.com").build();
+        ClassificationResult result = ClassificationResult.builder()
+                .activity(activity)
+                .classLabel(ClassLabel.AI_CAPABLE_PAGE) // minimal base score
+                .confidence(0.35) // low confidence (< 0.60)
+                .build();
+
+        ClassificationEvidence evidence = ClassificationEvidence.builder()
+                .activity(activity)
+                .build();
+
+        CompanyPolicy policy = CompanyPolicy.builder()
+                .rules(List.of())
+                .build();
+
+        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy, AiDomainStatus.BLOCKED);
+
+        assertEquals(100, eval.getRiskScore(), "Blocked domain must always receive score 100");
+        assertEquals(RiskLevel.CRITICAL, eval.getRiskLevel(), "Blocked domain must always be CRITICAL");
+        assertTrue(eval.getReasoning().startsWith("Domain is on the blocked AI list set by admin."));
+        assertFalse(eval.getReasoning().contains("low-confidence dampening"),
+                "Blocked domain is exempt from confidence dampening");
+    }
+
+    @Test
+    @DisplayName("APPROVED domain never exceeds MEDIUM (score capped at 49) even with maximal interaction evidence")
+    void approvedDomain_NeverExceedsMedium_EvenWithMaximalInteractionEvidence() {
+        BrowserActivity activity = BrowserActivity.builder().domain("corp-approved-ai.com").build();
+        ClassificationResult result = ClassificationResult.builder()
+                .activity(activity)
+                .classLabel(ClassLabel.AI_GENERATION) // base = 40 -> 25% weight = 10
+                .confidence(0.99)
+                .build();
+
+        ClassificationEvidence evidence = ClassificationEvidence.builder()
+                .activity(activity)
+                .fileUploadPresent(true)
+                .pasteEventCount(5)
+                .generateClickCount(10)
+                .build();
+
+        PolicyRule rule1 = PolicyRule.builder().ruleKey("R1").description("R1").requiresFileUpload(true).scoreWeight(40).build();
+        PolicyRule rule2 = PolicyRule.builder().ruleKey("R2").description("R2").requiresPasteEvent(true).scoreWeight(40).build();
+
+        CompanyPolicy policy = CompanyPolicy.builder()
+                .rules(List.of(rule1, rule2))
+                .build();
+
+        // Effective base (10) + rule1 (40) + rule2 (40) = 90 -> capped at 49
+        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy, AiDomainStatus.APPROVED);
+
+        assertEquals(49, eval.getRiskScore(), "Approved domain score must be capped at 49");
+        assertEquals(RiskLevel.MEDIUM, eval.getRiskLevel(), "Approved domain must not exceed MEDIUM");
+        assertTrue(eval.getReasoning().startsWith("Domain is approved for AI use; risk capped accordingly."));
+        assertTrue(eval.getReasoning().contains("capped at 49 (approved domain ceiling)"));
+    }
+
+    @Test
+    @DisplayName("APPROVED domain with low base score remains LOW when under 25")
+    void approvedDomain_LowActivityStaysLow() {
+        BrowserActivity activity = BrowserActivity.builder().domain("corp-approved-ai.com").build();
+        ClassificationResult result = ClassificationResult.builder()
+                .activity(activity)
+                .classLabel(ClassLabel.AI_CAPABLE_PAGE) // base = 10 -> 25% weight = 3
+                .confidence(0.95)
+                .build();
+
+        ClassificationEvidence evidence = ClassificationEvidence.builder().activity(activity).build();
+        CompanyPolicy policy = CompanyPolicy.builder().rules(List.of()).build();
+
+        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy, AiDomainStatus.APPROVED);
+
+        assertEquals(3, eval.getRiskScore());
+        assertEquals(RiskLevel.LOW, eval.getRiskLevel());
+        assertTrue(eval.getReasoning().startsWith("Domain is approved for AI use; risk capped accordingly."));
+    }
+
+    @Test
+    @DisplayName("UNKNOWN domain gets flat +15 elevation correctly")
+    void unknownDomain_GetsFlat15ElevationCorrectly() {
+        BrowserActivity activity = BrowserActivity.builder().domain("unreviewed-ai.com").build();
         ClassificationResult result = ClassificationResult.builder()
                 .activity(activity)
                 .classLabel(ClassLabel.AI_INTERACTION) // base = 25
                 .confidence(0.85) // >= 0.60
-                .modelVersion("v1")
                 .build();
 
         ClassificationEvidence evidence = ClassificationEvidence.builder()
                 .activity(activity)
                 .pasteEventCount(1)
-                .fileUploadPresent(true)
                 .build();
 
-        PolicyRule rule1 = PolicyRule.builder()
+        PolicyRule rule = PolicyRule.builder()
                 .ruleKey("RULE_PASTE")
-                .description("Pasted into prompt")
+                .description("Pasted prompt")
                 .requiresPasteEvent(true)
-                .scoreWeight(15)
-                .build();
-
-        PolicyRule rule2 = PolicyRule.builder()
-                .ruleKey("RULE_FILE")
-                .description("Uploaded file")
-                .requiresFileUpload(true)
                 .scoreWeight(20)
                 .build();
 
         CompanyPolicy policy = CompanyPolicy.builder()
-                .name("Test Policy")
-                .version(1)
-                .rules(List.of(rule1, rule2))
+                .rules(List.of(rule))
                 .build();
 
-        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy);
+        // Base (25) + Rule (20) + Elevation (15) = 60 -> HIGH
+        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy, AiDomainStatus.UNKNOWN);
 
-        // base (25) + rule1 (15) + rule2 (20) = 60 -> HIGH (50 <= 60 < 75)
         assertEquals(60, eval.getRiskScore());
         assertEquals(RiskLevel.HIGH, eval.getRiskLevel());
-        assertTrue(eval.getMatchedRuleIds().contains("RULE_PASTE"));
-        assertTrue(eval.getMatchedRuleIds().contains("RULE_FILE"));
-        assertTrue(eval.getReasoning().contains("Base score: 25"));
-        assertTrue(eval.getReasoning().contains("Final risk level: HIGH"));
+        assertTrue(eval.getReasoning().startsWith("Domain has not been classified by admin (unknown AI service); risk score elevated pending review."));
+        assertTrue(eval.getReasoning().contains("Elevation (15) = 60"));
     }
 
     @Test
-    @DisplayName("Low confidence dampening (< 0.60) multiplies raw score by 0.7")
-    void scoreArithmetic_LowConfidenceDampened() {
+    @DisplayName("UNKNOWN domain with low confidence (< 0.60) applies dampening after +15 elevation")
+    void unknownDomain_LowConfidenceDampened() {
         BrowserActivity activity = BrowserActivity.builder().domain("unknown.com").build();
         ClassificationResult result = ClassificationResult.builder()
                 .activity(activity)
                 .classLabel(ClassLabel.AI_GENERATION) // base = 40
-                .confidence(0.50) // < 0.60 -> dampening triggered!
-                .modelVersion("v1")
+                .confidence(0.50) // < 0.60 -> dampening applied
                 .build();
 
         ClassificationEvidence evidence = ClassificationEvidence.builder()
@@ -194,22 +295,20 @@ class RiskEngineTest {
                 .build();
 
         CompanyPolicy policy = CompanyPolicy.builder()
-                .name("Test Policy")
-                .version(1)
                 .rules(List.of(rule))
                 .build();
 
-        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy);
+        // Raw score = 40 + 30 + 15 = 85
+        // Adjusted score = (int) Math.round(85 * 0.7) = 59 -> HIGH
+        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy, AiDomainStatus.UNKNOWN);
 
-        // raw score = 40 + 30 = 70
-        // confidence = 0.50 (< 0.60) -> 70 * 0.7 = 49 -> MEDIUM (25 <= 49 < 50)
-        assertEquals(49, eval.getRiskScore());
-        assertEquals(RiskLevel.MEDIUM, eval.getRiskLevel());
+        assertEquals(59, eval.getRiskScore());
+        assertEquals(RiskLevel.HIGH, eval.getRiskLevel());
         assertTrue(eval.getReasoning().contains("low-confidence dampening"));
     }
 
     @Test
-    @DisplayName("Score clamping: score capped at 100 even if rule sum exceeds 100")
+    @DisplayName("Score clamping: score capped at 100 even if rule sum and elevation exceed 100")
     void scoreClamping_CappedAt100() {
         BrowserActivity activity = BrowserActivity.builder().domain("chatgpt.com").build();
         ClassificationResult result = ClassificationResult.builder()
@@ -231,9 +330,9 @@ class RiskEngineTest {
                 .rules(List.of(rule1, rule2))
                 .build();
 
-        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy);
+        // Raw score = 40 + 40 + 40 + 15 = 135 -> clamped to 100 -> CRITICAL
+        RiskEngine.Evaluation eval = riskEngine.evaluate(evidence, result, policy, AiDomainStatus.UNKNOWN);
 
-        // raw score = 40 + 40 + 40 = 120 -> clamped to 100 -> CRITICAL
         assertEquals(100, eval.getRiskScore());
         assertEquals(RiskLevel.CRITICAL, eval.getRiskLevel());
         assertTrue(eval.getReasoning().contains("clamped to 100"));
@@ -262,5 +361,43 @@ class RiskEngineTest {
         assertEquals("NONE", eval.getMatchedRuleIds());
         assertEquals(0, eval.getRiskScore());
         assertEquals(RiskLevel.LOW, eval.getRiskLevel());
+    }
+
+    @Test
+    @DisplayName("Reasoning explicitly names domain status as the first line for all domain statuses")
+    void reasoning_FirstLineExplicitlyNamesDomainStatus_AllBranches() {
+        BrowserActivity activity = BrowserActivity.builder().domain("test.com").build();
+        ClassificationResult aiResult = ClassificationResult.builder()
+                .activity(activity)
+                .classLabel(ClassLabel.AI_INTERACTION)
+                .confidence(0.95)
+                .build();
+        ClassificationEvidence evidence = ClassificationEvidence.builder().activity(activity).build();
+        CompanyPolicy policy = CompanyPolicy.builder().rules(List.of()).build();
+
+        // BLOCKED
+        RiskEngine.Evaluation evalBlocked = riskEngine.evaluate(evidence, aiResult, policy, AiDomainStatus.BLOCKED);
+        String[] linesBlocked = evalBlocked.getReasoning().split("\n");
+        assertEquals("Domain is on the blocked AI list set by admin.", linesBlocked[0]);
+
+        // APPROVED
+        RiskEngine.Evaluation evalApproved = riskEngine.evaluate(evidence, aiResult, policy, AiDomainStatus.APPROVED);
+        String[] linesApproved = evalApproved.getReasoning().split("\n");
+        assertEquals("Domain is approved for AI use; risk capped accordingly.", linesApproved[0]);
+
+        // UNKNOWN
+        RiskEngine.Evaluation evalUnknown = riskEngine.evaluate(evidence, aiResult, policy, AiDomainStatus.UNKNOWN);
+        String[] linesUnknown = evalUnknown.getReasoning().split("\n");
+        assertEquals("Domain has not been classified by admin (unknown AI service); risk score elevated pending review.", linesUnknown[0]);
+
+        // NON_AI
+        ClassificationResult nonAiResult = ClassificationResult.builder()
+                .activity(activity)
+                .classLabel(ClassLabel.NON_AI)
+                .confidence(0.95)
+                .build();
+        RiskEngine.Evaluation evalNonAi = riskEngine.evaluate(evidence, nonAiResult, policy, AiDomainStatus.UNKNOWN);
+        String[] linesNonAi = evalNonAi.getReasoning().split("\n");
+        assertEquals("Activity classified as non-AI; zero risk assigned.", linesNonAi[0]);
     }
 }

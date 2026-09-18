@@ -4,6 +4,7 @@ import com.shadowsentinel.classification.ClassificationCompletedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -17,6 +18,7 @@ public class RiskAssessmentEventListener {
         this.riskAssessmentService = riskAssessmentService;
     }
 
+    @Order(2)
     @EventListener
     public void onClassificationCompleted(ClassificationCompletedEvent event) {
         if (event == null || event.getResult() == null) {

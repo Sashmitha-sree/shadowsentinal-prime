@@ -1,5 +1,6 @@
 package com.shadowsentinel.classification;
 
+import com.shadowsentinel.auth.Role;
 import com.shadowsentinel.auth.User;
 import com.shadowsentinel.browser.BrowserActivity;
 import com.shadowsentinel.browser.BrowserActivityRepository;
@@ -123,7 +124,7 @@ public class ClassificationService {
         BrowserActivity activity = activityRepository.findById(activityId)
                 .orElseThrow(() -> new ResourceNotFoundException("Activity not found with id: " + activityId));
 
-        if (!activity.getSession().getUser().getId().equals(currentUser.getId())) {
+        if (!activity.getSession().getUser().getId().equals(currentUser.getId()) && currentUser.getRole() != Role.ADMIN) {
             throw new AccessDeniedException("Cannot access classification evidence for another user's activity");
         }
 
@@ -138,7 +139,7 @@ public class ClassificationService {
         BrowserActivity activity = activityRepository.findById(activityId)
                 .orElseThrow(() -> new ResourceNotFoundException("Activity not found with id: " + activityId));
 
-        if (!activity.getSession().getUser().getId().equals(currentUser.getId())) {
+        if (!activity.getSession().getUser().getId().equals(currentUser.getId()) && currentUser.getRole() != Role.ADMIN) {
             throw new AccessDeniedException("Cannot access classification result for another user's activity");
         }
 
@@ -155,7 +156,9 @@ public class ClassificationService {
             List<Predicate> predicates = new ArrayList<>();
 
             // User isolation check
-            predicates.add(cb.equal(root.get("activity").get("session").get("user").get("id"), currentUser.getId()));
+            if (currentUser.getRole() != Role.ADMIN) {
+                predicates.add(cb.equal(root.get("activity").get("session").get("user").get("id"), currentUser.getId()));
+            }
 
             if (label != null) {
                 predicates.add(cb.equal(root.get("classLabel"), label));
